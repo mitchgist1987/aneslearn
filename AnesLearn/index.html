@@ -338,17 +338,22 @@ function pgDashboard(){
   <div style="margin-bottom:28px;"><div style="${sLbl}margin-bottom:6px;">University of Colorado · Anesthesiology</div><h1 class="pg-title">Good morning, ${res?res.name.split(' ')[0]:'Doctor'}.</h1><p style="font-size:14px;color:#777;margin-top:6px;">Here's your curriculum overview.</p></div>
   <div class="stats-grid">${statsH}</div>
   <div style="${card}padding:20px 24px;margin-bottom:20px;">
-    <div style="${sLbl}margin-bottom:14px;">Quick Links</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <a href="https://apps.acgme.org/ads/" target="_blank" rel="noopener" style="${pBtn()}padding:9px 18px;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:7px;">
-        📋 ACGME Case Log
-      </a>
-      <a href="https://stanpumpr.io" target="_blank" rel="noopener" style="padding:9px 18px;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:7px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;color:#1a1a1a;font-weight:600;">
-        💉 StanPumpR
-      </a>
-      <a href="https://library.cuanschutz.edu" target="_blank" rel="noopener" style="padding:9px 18px;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:7px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;color:#1a1a1a;font-weight:600;">
-        📚 Strauss Library
-      </a>
+    <div style="${sLbl}margin-bottom:14px;">Quick Links <button onclick="go('resources')" style="${gBtn}font-size:11px;padding:3px 10px;margin-left:8px;">All resources →</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">
+      ${[
+        { icon:'📋', label:'ACGME Case Log', url:'https://apps.acgme.org/ads/', desc:'Log your clinical cases' },
+        { icon:'💉', label:'StanPumpR', url:'https://stanpumpr.io', desc:'TCI & pharmacokinetic modeling' },
+        { icon:'📚', label:'Strauss Library', url:'https://library.cuanschutz.edu', desc:'CU library access' },
+        { icon:'🗓️', label:'QGenda', url:'https://app.qgenda.com', desc:'Scheduling & rotations' },
+        { icon:'📗', label:'Green Book', url:'https://gb.cugammadex.com', desc:'Unofficial residency guide' },
+        { icon:'📖', label:'OpenAnesthesia', url:'https://www.openanesthesia.org', desc:'Board review content' },
+      ].map(l => `<a href="${l.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border:1.5px solid #E8E5DF;border-radius:10px;text-decoration:none;transition:border-color .15s;" onmouseover="this.style.borderColor='#CFB87C'" onmouseout="this.style.borderColor='#E8E5DF'">
+        <span style="font-size:20px;flex-shrink:0;">${l.icon}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:13px;color:#1a1a1a;">${l.label}</div>
+          <div style="font-size:11px;color:#aaa;">${l.desc}</div>
+        </div>
+      </a>`).join('')}
     </div>
   </div>
   ${(()=>{
