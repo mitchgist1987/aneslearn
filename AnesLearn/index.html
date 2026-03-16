@@ -477,7 +477,23 @@ function pgModule(){
         const active=S.activePlayer===item.id;
         const eUrl=buildEmbed(item.url,item.type);
         const embedH=item.type==='spotify'?152:item.type==='pdf'?520:420;
-        return `<div style="margin-bottom:10px;">
+                // Podcast type (non-Spotify): clean external link
+        if(item.type==='podcast'){
+          return `<div style="margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <a href="${item.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;background:#F4F2EE;border:1.5px solid #E8E5DF;cursor:pointer;flex:1;min-width:0;text-decoration:none;">
+                <span style="font-size:22px;flex-shrink:0;">🎙️</span>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-weight:600;font-size:14px;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.label}</div>
+                  <div style="font-size:11px;color:#aaa;margin-top:2px;">Opens ACCRAC podcast ↗</div>
+                </div>
+                <span style="font-size:14px;color:#ccc;flex-shrink:0;">↗</span>
+              </a>
+              ${S.adminUnlocked?`<button onclick="deleteContent(${JSON.stringify(item.id).replace(/"/g,'&quot;')})" style="padding:8px;border-radius:8px;background:#FDF0EE;border:1px solid #F5C6C0;cursor:pointer;font-size:13px;" title="Remove">🗑</button>`:''}
+            </div>
+          </div>`;
+        }
+                return `<div style="margin-bottom:10px;">
           <div style="display:flex;align-items:center;gap:8px;">
             <button onclick="togglePlayer(${item.id})" style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;background:${active?'#1B1B1B':'#F4F2EE'};border:1.5px solid ${active?'#CFB87C':'#E8E5DF'};cursor:pointer;flex:1;min-width:0;text-align:left;">
               <span style="font-size:22px;flex-shrink:0;">${lt.i}</span>
@@ -1276,6 +1292,7 @@ async function toggleDone(){
 }
 
 function togglePlayer(id){S.activePlayer=S.activePlayer===id?null:id;draw();}
+
 
 function showCt(){S.showAddContent=true;S.editingContentId=null;draw();}
 function cancelCt(){S.showAddContent=false;S.editingContentId=null;draw();}
