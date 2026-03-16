@@ -216,7 +216,7 @@ const LT=[
   {v:'upload',l:'Uploaded PDF',i:'📎'},
 ];
 const getLT=v=>LT.find(t=>t.v===v)||LT[6];
-const canEmbed=t=>['youtube','gslides','gdrive','spotify','pdf','upload'].includes(t);
+const canEmbed=t=>['youtube','gslides','gdrive','spotify','pdf','upload','podcast'].includes(t);
 const isPodcastType=t=>t==='spotify'||t==='podcast';
 
 function detectType(url){
@@ -236,6 +236,10 @@ function buildEmbed(url,type){
     if(type==='gslides'){const m=url.match(/\/presentation\/d\/([^/]+)/);if(m)return`https://docs.google.com/presentation/d/${m[1]}/embed?start=false&loop=false`;}
     if(type==='gdrive'){const m=url.match(/\/d\/([^/]+)/);if(m)return`https://drive.google.com/file/d/${m[1]}/preview`;if(url.includes('/preview'))return url;}
     if(type==='spotify'){const m=url.match(/open\.spotify\.com\/(episode|show|track)\/([a-zA-Z0-9]+)/);if(m)return`https://open.spotify.com/embed/${m[1]}/${m[2]}?utm_source=generator`;}
+    if(type==='podcast'&&url.includes('accrac.com')){
+      // ACCRAC WordPress embed — just append /embed/ to episode URL
+      return url.replace(/\/+$/,'')+'/embed/';
+    }
     if(type==='pdf')return url;
     if(type==='upload')return url; // base64 data URL stored in IndexedDB
   }catch{}return null;
@@ -271,7 +275,7 @@ function hdr(){
   const res=getRes();
   const ini=res?inits(res.name):'DR';
 
-  const navs=[['dashboard','Dashboard'],['courses','Courses'],['quizzes','OR Worksheets'],['kudos','K-Hole Kudos'],['notes','Notes'],['podcasts','Podcasts'],['calendar','Calendar']];
+  const navs=[['dashboard','Dashboard'],['courses','Courses'],['quizzes','OR Worksheets'],['kudos','K-Hole Kudos'],['notes','Notes'],['podcasts','Podcasts'],['calendar','Calendar'],['resources','Resources']];
   const navH=navs.map(([id,lbl])=>{
     const a=S.view===id||(id==='courses'&&(S.view==='course'||S.view==='module'));
     return `<button onclick="go('${id}')" style="background:none;border:none;cursor:pointer;padding:0 12px;height:40px;color:${a?'#CFB87C':'rgba(255,255,255,.45)'};font-weight:${a?700:400};font-size:13px;border-bottom:2px solid ${a?'#CFB87C':'transparent'};white-space:nowrap;">${lbl}</button>`;
@@ -476,30 +480,14 @@ function pgModule(){
         const lt=getLT(item.type);
         const active=S.activePlayer===item.id;
         const eUrl=buildEmbed(item.url,item.type);
-        const embedH=item.type==='spotify'?152:item.type==='pdf'?520:420;
-                // Podcast type (non-Spotify): clean external link
-        if(item.type==='podcast'){
-          return `<div style="margin-bottom:10px;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <a href="${item.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;background:#F4F2EE;border:1.5px solid #E8E5DF;cursor:pointer;flex:1;min-width:0;text-decoration:none;">
-                <span style="font-size:22px;flex-shrink:0;">🎙️</span>
-                <div style="flex:1;min-width:0;">
-                  <div style="font-weight:600;font-size:14px;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.label}</div>
-                  <div style="font-size:11px;color:#aaa;margin-top:2px;">Opens ACCRAC podcast ↗</div>
-                </div>
-                <span style="font-size:14px;color:#ccc;flex-shrink:0;">↗</span>
-              </a>
-              ${S.adminUnlocked?`<button onclick="deleteContent(${JSON.stringify(item.id).replace(/"/g,'&quot;')})" style="padding:8px;border-radius:8px;background:#FDF0EE;border:1px solid #F5C6C0;cursor:pointer;font-size:13px;" title="Remove">🗑</button>`:''}
-            </div>
-          </div>`;
-        }
-                return `<div style="margin-bottom:10px;">
+        const embedH=item.type==='spotify'?152:item.type==='podcast'?380:item.type==='pdf'?520:420;
+                        return `<div style="margin-bottom:10px;">
           <div style="display:flex;align-items:center;gap:8px;">
             <button onclick="togglePlayer(${item.id})" style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;background:${active?'#1B1B1B':'#F4F2EE'};border:1.5px solid ${active?'#CFB87C':'#E8E5DF'};cursor:pointer;flex:1;min-width:0;text-align:left;">
               <span style="font-size:22px;flex-shrink:0;">${lt.i}</span>
               <div style="flex:1;min-width:0;">
                 <div style="font-weight:600;font-size:14px;color:${active?'#CFB87C':'#1a1a1a'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.label}</div>
-                <div style="font-size:11px;color:${active?'rgba(207,184,124,.6)':'#aaa'};margin-top:2px;">${item.type==='upload'?(active?'▲ Close':'▶ View PDF')+' · Stored locally':item.type==='spotify'?(active?'▲ Close':'🎧 Play')+' · Podcast / Spotify':canEmbed(item.type)?(active?'▲ Close':'▶ Play')+' · '+lt.l:'Opens in new tab · '+lt.l}</div>
+                <div style="font-size:11px;color:${active?'rgba(207,184,124,.6)':'#aaa'};margin-top:2px;">${item.type==='upload'?(active?'▲ Close':'▶ View PDF')+' · Stored locally':item.type==='spotify'?(active?'▲ Close':'🎧 Play')+' · Spotify':item.type==='podcast'?(active?'▲ Close':'🎙️ Play')+' · ACCRAC Podcast':canEmbed(item.type)?(active?'▲ Close':'▶ Play')+' · '+lt.l:'Opens in new tab · '+lt.l}</div>
               </div>
               <span style="font-size:14px;color:${active?'#CFB87C':'#ccc'};flex-shrink:0;">${canEmbed(item.type)?(active?'▲':'▶'):'↗'}</span>
             </button>
@@ -1033,6 +1021,7 @@ function draw(){
   else if(S.view==='kudos') main=pgKudos();
   else if(S.view==='notes') main=pgNotes();
   else if(S.view==='podcasts') main=pgPodcasts();
+  else if(S.view==='resources') main=pgResources();
 
   document.getElementById('app').innerHTML=
     hdr()+
@@ -1957,6 +1946,19 @@ function renderPlayer(item, eUrl, embedH) {
 
   if (canEmbed(item.type) && eUrl) {
     // Podcast/Spotify gets a distinct warm player header
+    if (item.type === 'podcast') {
+      return `<div style="margin-top:8px;border-radius:12px;overflow:hidden;border:1.5px solid #E2CFA0;">
+        <div style="background:linear-gradient(135deg,#CFB87C 0%,#A8924A 100%);padding:14px 18px;display:flex;align-items:center;gap:12px;">
+          <div style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🎙️</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:10px;font-weight:700;color:rgba(27,27,27,.6);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">ACCRAC Podcast</div>
+            <div style="font-size:14px;font-weight:700;color:#1B1B1B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.label}</div>
+          </div>
+          <a href="${item.url}" target="_blank" rel="noopener" style="font-size:11px;color:rgba(27,27,27,.6);text-decoration:none;flex-shrink:0;">accrac.com ↗</a>
+        </div>
+        <iframe src="${eUrl}" width="100%" height="380" frameborder="0" scrolling="no" style="display:block;background:#fff;" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+      </div>`;
+    }
     if (item.type === 'spotify') {
       return `<div style="margin-top:8px;border-radius:12px;overflow:hidden;border:1.5px solid #E2CFA0;">
         <div style="background:linear-gradient(135deg,#1DB954 0%,#158A3E 100%);padding:14px 18px;display:flex;align-items:center;gap:12px;">
@@ -2321,6 +2323,57 @@ async function submitKudos() {
   S.modal = { type: 'kudosSent', data: { kudo: {...kudo, recipientName:kudo.recipient_name, badgeEmoji:kudo.badge_emoji, badgeLabel:kudo.badge_label} } };
   draw();
 }
+
+// ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
+function pgResources() {
+  const links = [
+    { icon:'📋', label:'ACGME Case Log', url:'https://apps.acgme.org/ads/', desc:'Log your clinical cases' },
+    { icon:'💉', label:'StanPumpR', url:'https://stanpumpr.io', desc:'TCI & pharmacokinetic modeling' },
+    { icon:'📚', label:'Strauss Health Sciences Library', url:'https://library.cuanschutz.edu', desc:'CU library access' },
+    { icon:'🏥', label:'QGenda', url:'https://app.qgenda.com', desc:'Scheduling & rotations' },
+    { icon:'🎙️', label:'ACCRAC Podcast', url:'https://accrac.com', desc:'Anesthesia board review podcast' },
+    { icon:'📖', label:'OpenAnesthesia', url:'https://www.openanesthesia.org', desc:'Free board review content' },
+  ];
+
+  const linksH = links.map(l => `
+    <a href="${l.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border:1.5px solid #E8E5DF;border-radius:10px;text-decoration:none;transition:border-color .15s;" onmouseover="this.style.borderColor='#CFB87C'" onmouseout="this.style.borderColor='#E8E5DF'">
+      <span style="font-size:24px;flex-shrink:0;">${l.icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;color:#1a1a1a;">${l.label}</div>
+        <div style="font-size:12px;color:#aaa;margin-top:1px;">${l.desc}</div>
+      </div>
+      <span style="font-size:14px;color:#ccc;">↗</span>
+    </a>`).join('');
+
+  return \`<div class="fade">
+  <div style="margin-bottom:24px;">
+    <div style="${sLbl}margin-bottom:6px;">Resident Resources</div>
+    <h1 style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;">Resources</h1>
+  </div>
+
+  <!-- Green Book embed -->
+  <div style="${card}overflow:hidden;margin-bottom:24px;">
+    <div style="background:#1B1B1B;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;background:#4CAF50;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">📗</div>
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#fff;">CU ANES Green Book</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.4);">The (very unofficial) guide to CU Anesthesiology residency</div>
+        </div>
+      </div>
+      <a href="https://gb.cugammadex.com" target="_blank" rel="noopener" style="font-size:11px;color:rgba(255,255,255,.4);text-decoration:none;">Open full site ↗</a>
+    </div>
+    <iframe src="https://gb.cugammadex.com" width="100%" height="600" frameborder="0" style="display:block;background:#fff;" title="CU ANES Green Book"></iframe>
+  </div>
+
+  <!-- External links -->
+  <div style="${sLbl}margin-bottom:12px;">Quick Links</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;">
+    \${linksH}
+  </div>
+</div>\`;
+}
+
 
 // ─── PODCASTS PAGE ────────────────────────────────────────────────────────────
 function pgPodcasts() {
