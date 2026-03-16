@@ -2330,7 +2330,7 @@ function pgResources() {
     { icon:'📋', label:'ACGME Case Log', url:'https://apps.acgme.org/ads/', desc:'Log your clinical cases' },
     { icon:'💉', label:'StanPumpR', url:'https://stanpumpr.io', desc:'TCI & pharmacokinetic modeling' },
     { icon:'📚', label:'Strauss Health Sciences Library', url:'https://library.cuanschutz.edu', desc:'CU library access' },
-    { icon:'🏥', label:'QGenda', url:'https://app.qgenda.com', desc:'Scheduling & rotations' },
+    { icon:'🗓️', label:'QGenda', url:'https://app.qgenda.com', desc:'Scheduling & rotations' },
     { icon:'🎙️', label:'ACCRAC Podcast', url:'https://accrac.com', desc:'Anesthesia board review podcast' },
     { icon:'📖', label:'OpenAnesthesia', url:'https://www.openanesthesia.org', desc:'Free board review content' },
   ];
@@ -2345,15 +2345,7 @@ function pgResources() {
       <span style="font-size:14px;color:#ccc;">↗</span>
     </a>`).join('');
 
-  return \`<div class="fade">
-  <div style="margin-bottom:24px;">
-    <div style="${sLbl}margin-bottom:6px;">Resident Resources</div>
-    <h1 style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;">Resources</h1>
-  </div>
-
-  <!-- Green Book embed -->
-  <div style="${card}overflow:hidden;margin-bottom:24px;">
-    <div style="background:#1B1B1B;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+  const gbHeader = `<div style="background:#1B1B1B;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="width:32px;height:32px;background:#4CAF50;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">📗</div>
         <div>
@@ -2362,16 +2354,24 @@ function pgResources() {
         </div>
       </div>
       <a href="https://gb.cugammadex.com" target="_blank" rel="noopener" style="font-size:11px;color:rgba(255,255,255,.4);text-decoration:none;">Open full site ↗</a>
-    </div>
-    <iframe src="https://gb.cugammadex.com" width="100%" height="600" frameborder="0" style="display:block;background:#fff;" title="CU ANES Green Book"></iframe>
-  </div>
+    </div>`;
 
-  <!-- External links -->
+  const gbEmbed = `<iframe src="https://gb.cugammadex.com" width="100%" height="600" frameborder="0" style="display:block;background:#fff;" title="CU ANES Green Book"></iframe>`;
+
+  return `<div class="fade">
+  <div style="margin-bottom:24px;">
+    <div style="${sLbl}margin-bottom:6px;">Resident Resources</div>
+    <h1 style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;">Resources</h1>
+  </div>
+  <div style="${card}overflow:hidden;margin-bottom:24px;">
+    ${gbHeader}
+    ${gbEmbed}
+  </div>
   <div style="${sLbl}margin-bottom:12px;">Quick Links</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;">
-    \${linksH}
+    ${linksH}
   </div>
-</div>\`;
+</div>`;
 }
 
 
