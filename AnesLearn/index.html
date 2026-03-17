@@ -129,7 +129,7 @@ const S={
   courseFilter:'all', moduleTab:'content',
   activePlayer:null, showAddContent:false, editingContentId:null,
   calYear:2026, calMonth:2, calSel:null,
-  kudos: [],
+  kudos: [], evaluations: [],
   activeQuizId:null, quizAnswers:{}, quizSubmitted:false, quizzes:[], quizResponses:{},
   icsUrl: '',
   icsFetching: false, icsLastFetched: null, icsEvents:[],
@@ -378,6 +378,22 @@ function pgDashboard(){
     <div style="${card}padding:18px 20px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><div style="${sLbl}">My Courses</div><button onclick="go('courses')" style="${gBtn}font-size:11px;padding:3px 10px;">View all →</button></div>${coursesH}</div>
     <div style="${card}padding:18px 20px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><div style="${sLbl}">Upcoming Events</div><button onclick="go('calendar')" style="${gBtn}font-size:11px;padding:3px 10px;">Calendar →</button></div>${evH}</div>
   </div>
+
+  <!-- Anesthesia In-Sight -->
+  <div style="${card}overflow:hidden;margin-top:20px;">
+    <div style="background:#1B1B1B;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;background:linear-gradient(135deg,#6366F1,#8B5CF6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">📊</div>
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#fff;">Anesthesia In-Sight</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.4);">Resident performance & quality dashboard</div>
+        </div>
+      </div>
+      <a href="https://voice-time-33963013.figma.site" target="_blank" rel="noopener" style="font-size:11px;color:rgba(255,255,255,.4);text-decoration:none;">Open full site ↗</a>
+    </div>
+    <iframe src="https://voice-time-33963013.figma.site" width="100%" height="700" frameborder="0" style="display:block;background:#fff;" title="Anesthesia In-Sight"></iframe>
+  </div>
+
 </div>`;
 }
 
@@ -617,6 +633,30 @@ function pgModule(){
     <div style="display:flex;border-bottom:1px solid #F0EDE8;padding:0 24px;">${tabs}</div>
     <div style="padding:22px 24px;">${tab==='content'?contentH:tab==='reading'?readingH:notesH}</div>
   </div>
+
+  <!-- Lecture Evaluation -->
+  ${(()=>{
+    const evalKey = 'al6_eval_' + m.id;
+    const alreadySubmitted = localStorage.getItem(evalKey);
+    if(alreadySubmitted) return `
+      <div style="margin-top:16px;padding:16px 20px;background:#F4FAF6;border:1.5px solid #B8DFC9;border-radius:12px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">✅</span>
+        <div>
+          <div style="font-weight:700;font-size:13px;color:#2D7D4F;">Feedback submitted</div>
+          <div style="font-size:12px;color:#5a9a72;">Thank you for evaluating this lecture.</div>
+        </div>
+      </div>`;
+    return `
+      <div style="margin-top:16px;padding:20px 24px;background:#FAFAFA;border:1.5px solid #E8E5DF;border-radius:12px;">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px;">📝 Evaluate this lecture</div>
+        <div style="font-size:12px;color:#aaa;margin-bottom:12px;">Anonymous · one response per lecture</div>
+        <textarea id="eval-text-${m.id}" placeholder="Share your feedback — content quality, clinical relevance, teaching style, suggestions..." style="width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:13px;font-family:inherit;resize:vertical;min-height:90px;outline:none;" onfocus="this.style.borderColor='#CFB87C'" onblur="this.style.borderColor='#E8E5DF'"></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+          <button onclick="submitEval(${m.id}, ${c.id}, ${JSON.stringify(m.title)})" style="${pBtn()}padding:9px 20px;font-size:13px;">Submit Feedback</button>
+        </div>
+      </div>`;
+  })()}
+
 </div>`;
 }
 
@@ -789,6 +829,71 @@ function adminPanel(){
       <span style="font-size:12px;color:#aaa;">${active.length} active · older kudos auto-expire</span>
     </div>${rows}`;
   }
+  if(tab==='evals'){
+    const evals = S.evaluations || [];
+    // Group by module
+    const byModule = {};
+    evals.forEach(e => {
+      const key = e.module_id;
+      if(!byModule[key]) byModule[key] = {title: e.module_title || 'Module '+e.module_id, course_id: e.course_id, items: []};
+      byModule[key].items.push(e);
+    });
+    const modules = Object.entries(byModule).sort((a,b) => b[1].items.length - a[1].items.length);
+
+    const exportCSV = () => {
+      const rows = [['Module','Course','Feedback','Flagged','Date']];
+      evals.forEach(e => {
+        rows.push([
+          (e.module_title||'').replace(/,/g,' '),
+          e.course_id,
+          (e.feedback||'').replace(/,/g,' ').replace(/\n/g,' '),
+          e.flagged ? 'Yes' : 'No',
+          e.ts ? new Date(e.ts).toLocaleDateString() : ''
+        ]);
+      });
+      const csv = rows.map(r => r.join(',')).join('\n');
+      const a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      a.download = 'aneslearn_evaluations.csv';
+      a.click();
+    };
+
+    const flaggedCount = evals.filter(e => e.flagged).length;
+
+    const moduleCards = modules.length ? modules.map(([modId, mod]) => {
+      const flagged = mod.items.filter(e => e.flagged);
+      const unflagged = mod.items.filter(e => !e.flagged);
+      const responseItems = mod.items.map(e => `
+        <div style="padding:12px 14px;background:${e.flagged?'#FFF8F0':'#FAFAFA'};border:1px solid ${e.flagged?'#F5C6C0':'#E8E5DF'};border-radius:8px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div style="font-size:13px;color:#1a1a1a;line-height:1.5;flex:1;">${e.feedback}</div>
+            <button onclick="toggleEvalFlag('${e.id}',${!e.flagged})" style="flex-shrink:0;padding:4px 10px;border-radius:6px;border:1px solid ${e.flagged?'#F5C6C0':'#E8E5DF'};background:${e.flagged?'#FDF0EE':'#fff'};font-size:11px;cursor:pointer;color:${e.flagged?'#C0392B':'#777'};">${e.flagged?'🚩 Flagged':'Flag'}</button>
+          </div>
+          <div style="font-size:11px;color:#aaa;margin-top:6px;">${e.ts ? new Date(e.ts).toLocaleDateString() : ''}</div>
+        </div>`).join('');
+      return `<div style="${card}margin-bottom:12px;padding:18px 20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div>
+            <div style="font-weight:700;font-size:14px;">${mod.title}</div>
+            <div style="font-size:11px;color:#aaa;margin-top:2px;">${mod.items.length} response${mod.items.length!==1?'s':''}${flagged.length?' · '+flagged.length+' flagged':''}</div>
+          </div>
+        </div>
+        ${responseItems}
+      </div>`;
+    }).join('') : `<div style="text-align:center;padding:48px 0;color:#aaa;font-size:14px;">No evaluations submitted yet.</div>`;
+
+    body = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="${sLbl}">Lecture Evaluations</div>
+        <h2 style="font-size:20px;font-weight:800;font-family:'Playfair Display',serif;margin-top:4px;">${evals.length} Response${evals.length!==1?'s':''}</h2>
+        ${flaggedCount ? `<div style="font-size:12px;color:#C0392B;margin-top:4px;">🚩 ${flaggedCount} flagged for follow-up</div>` : ''}
+      </div>
+      ${evals.length ? `<button onclick="(${exportCSV})()" style="${pBtn()}padding:9px 18px;font-size:13px;">⬇ Export CSV</button>` : ''}
+    </div>
+    ${moduleCards}`;
+  }
+
   if(tab==='feeds'){
     const ics = S.icsUrl||'';
     body=`
@@ -874,6 +979,7 @@ function adminPanel(){
       ${tabBtn('residents','👥 Residents',S.residents.length)}
       ${tabBtn('events','📅 Events',S.events.length)}
       ${tabBtn('kudos','🏆 Kudos',S.kudos.filter(k=>(Date.now()-k.ts)<30*24*60*60*1000).length)}
+      ${tabBtn('evals','📝 Evals',null)}
       ${tabBtn('feeds','📡 Live Feeds',null)}
       ${tabBtn('danger','⚠️ Reset',null)}
     </div>
@@ -1397,6 +1503,38 @@ function togglePushPrompt() {
     registerPush();
   }
 }
+
+// ─── EVALUATIONS ──────────────────────────────────────────────────────────────
+async function submitEval(moduleId, courseId, moduleTitle) {
+  const text = document.getElementById('eval-text-' + moduleId)?.value.trim();
+  if (!text) { alert('Please enter some feedback before submitting.'); return; }
+  try {
+    await dbUpsert('evaluations', {
+      module_id: moduleId,
+      course_id: courseId,
+      module_title: moduleTitle,
+      feedback: text,
+      flagged: false,
+      ts: Date.now()
+    });
+    localStorage.setItem('al6_eval_' + moduleId, '1');
+    draw();
+  } catch(e) {
+    alert('Could not submit feedback. Please try again.');
+    console.error('submitEval error:', e);
+  }
+}
+
+
+async function toggleEvalFlag(evalId, flagged) {
+  try {
+    await sb.from('evaluations').update({flagged}).eq('id', evalId);
+    const idx = S.evaluations.findIndex(e => e.id === evalId);
+    if(idx >= 0) S.evaluations[idx].flagged = flagged;
+    draw();
+  } catch(e) { console.error('toggleEvalFlag error:', e); }
+}
+
 
 // ─── ROSTER CSV UPLOAD ────────────────────────────────────────────────────────
 function downloadRosterTemplate() {
@@ -3096,12 +3234,13 @@ async function bootstrap() {
     }
 
     // Load all data in parallel
-    const [resRows, courseRows, eventRows, kudosRows, quizRows, icsUrlSetting, podcastLibSetting] = await Promise.all([
+    const [resRows, courseRows, eventRows, kudosRows, quizRows, evalRows, icsUrlSetting, podcastLibSetting] = await Promise.all([
       dbGet('residents'),
       dbGet('courses'),
       dbGet('events'),
       dbGet('kudos'),
       dbGet('quizzes'),
+      dbGet('evaluations'),
       dbGetSetting('icsUrl', ''),
       dbGetSetting('podcast_library', '[]'),
     ]);
@@ -3134,6 +3273,9 @@ async function bootstrap() {
 
     // Hydrate quizzes
     S.quizzes = quizRows.map(q => ({...q, docxBytes:q.docx_bytes}));
+
+    // Hydrate evaluations
+    S.evaluations = evalRows || [];
 
     // Hydrate ICS url
     S.icsUrl = icsUrlSetting || '';
