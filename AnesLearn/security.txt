@@ -1,0 +1,9 @@
+Contact: mailto:mitchell.gist@cuanschutz.edu
+Expires: 2027-01-01T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://cuaneslearn.com/.well-known/security.txt
+
+# AnesLearn is a residency education platform for the
+# University of Colorado Department of Anesthesiology.
+# It is maintained by faculty and used by medical residents
+# for curriculum management and board exam preparation.
