@@ -2596,8 +2596,7 @@ function pgSuggestions() {
       <label style="font-size:13px;font-weight:700;color:#1a1a1a;display:block;margin-bottom:6px;">Category</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;" id="sugg-cats">
         ${['💡 Idea','👍 Positive','⚠️ Concern','🗓️ Scheduling','🎓 Education','❓ Other'].map(c =>
-          `<button onclick="document.querySelectorAll('#sugg-cats button').forEach(b=>b.style.background='#fff');document.querySelectorAll('#sugg-cats button').forEach(b=>b.style.color='#1a1a1a');this.style.background='#1B1B1B';this.style.color='#fff';S._suggCat='${c}'" 
-           style="padding:7px 14px;border-radius:20px;border:1.5px solid #E8E5DF;background:#fff;font-size:13px;cursor:pointer;font-weight:600;">${c}</button>`
+          '<button onclick="document.querySelectorAll(\'#sugg-cats button\').forEach(b=>{b.style.background=\'#fff\';b.style.color=\'#1a1a1a\'});this.style.background=\'#1B1B1B\';this.style.color=\'#fff\';S._suggCat=\''+c+'\';" style="padding:7px 14px;border-radius:20px;border:1.5px solid #E8E5DF;background:#fff;font-size:13px;cursor:pointer;font-weight:600;">'+c+'</button>'
         ).join('')}
       </div>
     </div>
