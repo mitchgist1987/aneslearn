@@ -653,7 +653,7 @@ function pgModule(){
         <div style="font-size:12px;color:#aaa;margin-bottom:12px;">Anonymous · one response per lecture</div>
         <textarea id="eval-text-${m.id}" placeholder="Share your feedback — content quality, clinical relevance, teaching style, suggestions..." style="width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:13px;font-family:inherit;resize:vertical;min-height:90px;outline:none;" onfocus="this.style.borderColor='#CFB87C'" onblur="this.style.borderColor='#E8E5DF'"></textarea>
         <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-          <button onclick="submitEval(${m.id}, ${c.id}, ${JSON.stringify(m.title)})" style="${pBtn()}padding:9px 20px;font-size:13px;">Submit Feedback</button>
+          <button onclick="submitEval(${m.id}, ${c.id})" style="${pBtn()}padding:9px 20px;font-size:13px;">Submit Feedback</button>
         </div>
       </div>`;
   })()}
@@ -1575,9 +1575,12 @@ function togglePushPrompt() {
 }
 
 // ─── EVALUATIONS ──────────────────────────────────────────────────────────────
-async function submitEval(moduleId, courseId, moduleTitle) {
+async function submitEval(moduleId, courseId) {
   const text = document.getElementById('eval-text-' + moduleId)?.value.trim();
   if (!text) { alert('Please enter some feedback before submitting.'); return; }
+  const course = S.courses.find(c => c.id === courseId);
+  const mod = course?.modules.find(m => m.id === moduleId);
+  const moduleTitle = mod?.title || 'Module ' + moduleId;
   try {
     const evalRow = {
       module_id: moduleId,
@@ -2615,10 +2618,9 @@ function pgSuggestions() {
 
   <!-- Ted Lasso GIF card -->
   <div style="${card}overflow:hidden;margin-bottom:24px;display:flex;flex-direction:column;align-items:center;padding:24px;text-align:center;">
-    <img src="https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExdnVzZmd6cXE2NWd3dXNqNWNhMGNtcWZxanpnYnVzNnlqZXJhZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0MYGb1LuZ3n7dRnO/giphy.gif" 
+    <img src="https://64.media.tumblr.com/e15c325cf81765d5b0df7af6350e9a8a/a6e058f1611e0225-5c/s540x810/e3d2ef94d257eedd86f2ade6f77865591ef9f60a.gif" 
       style="width:100%;max-width:420px;border-radius:10px;margin-bottom:16px;" 
-      alt="Ted Lasso suggestion box"
-      onerror="this.style.display='none'">
+      alt="Ted Lasso suggestion box">
     <div style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:4px;">"I asked Nate to make us a good old-fashioned suggestion box."</div>
     <div style="font-size:13px;color:#aaa;">All submissions are completely anonymous. No names, no IDs.</div>
   </div>
