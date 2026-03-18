@@ -129,7 +129,7 @@ const S={
   courseFilter:'all', moduleTab:'content',
   activePlayer:null, showAddContent:false, editingContentId:null,
   calYear:2026, calMonth:2, calSel:null,
-  kudos: [], evaluations: [],
+  kudos: [], evaluations: [], suggestions: [],
   activeQuizId:null, quizAnswers:{}, quizSubmitted:false, quizzes:[], quizResponses:{},
   icsUrl: '',
   icsFetching: false, icsLastFetched: null, icsEvents:[],
@@ -275,7 +275,7 @@ function hdr(){
   const res=getRes();
   const ini=res?inits(res.name):'DR';
 
-  const navs=[['dashboard','Dashboard'],['courses','Courses'],['quizzes','OR Worksheets'],['kudos','K-Hole Kudos'],['notes','Notes'],['podcasts','Podcasts'],['calendar','Calendar'],['resources','Resources']];
+  const navs=[['dashboard','Dashboard'],['courses','Courses'],['quizzes','OR Worksheets'],['kudos','K-Hole Kudos'],['notes','Notes'],['podcasts','Podcasts'],['calendar','Calendar'],['resources','Resources'],['suggestions','Suggestion Box']];
   const navH=navs.map(([id,lbl])=>{
     const a=S.view===id||(id==='courses'&&(S.view==='course'||S.view==='module'));
     return `<button onclick="go('${id}')" style="background:none;border:none;cursor:pointer;padding:0 12px;height:40px;color:${a?'#CFB87C':'rgba(255,255,255,.45)'};font-weight:${a?700:400};font-size:13px;border-bottom:2px solid ${a?'#CFB87C':'transparent'};white-space:nowrap;">${lbl}</button>`;
@@ -452,6 +452,7 @@ function pgCourse(){
       <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
         ${hc?`<span style="font-size:10px;padding:3px 7px;border-radius:4px;background:#FAF3DF;color:#A8924A;font-weight:700;border:1px solid #E2CFA0;">${(m.content||[]).length} content</span>`:''}
         ${hr?`<span style="font-size:10px;padding:3px 7px;border-radius:4px;background:#EDF1FB;color:#2D5B9E;font-weight:700;border:1px solid #B8C8E8;">reading</span>`:''}
+        ${(()=>{const ec=(S.evaluations||[]).filter(e=>e.module_id===m.id).length;return ec?`<span style="font-size:10px;padding:3px 7px;border-radius:4px;background:#F0F4FF;color:#4A5BA8;font-weight:700;border:1px solid #C0CAFE;">📝 ${ec}</span>`:''})()}
         ${m.completed?'<span style="font-size:16px;color:#2D7D4F;">✓</span>':''}
         <span style="font-size:16px;color:#ccc;">›</span>
       </div>
@@ -894,6 +895,49 @@ function adminPanel(){
     ${moduleCards}`;
   }
 
+  if(tab==='suggestions'){
+    const suggs = (S.suggestions||[]).sort((a,b)=>b.ts-a.ts);
+    const flagged = suggs.filter(s=>s.flagged);
+
+    const exportCSV = () => {
+      const rows = [['Category','Feedback','Flagged','Date']];
+      suggs.forEach(s => rows.push([
+        (s.category||'').replace(/,/g,' '),
+        (s.feedback||'').replace(/,/g,' ').replace(/\n/g,' '),
+        s.flagged?'Yes':'No',
+        s.ts?new Date(s.ts).toLocaleDateString():''
+      ]));
+      const csv = rows.map(r=>r.join(',')).join('\n');
+      const a=document.createElement('a');
+      a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+      a.download='aneslearn_suggestions.csv';
+      a.click();
+    };
+
+    const cards = suggs.length ? suggs.map(s => `
+      <div style="${card}margin-bottom:10px;padding:16px 20px;border:1.5px solid ${s.flagged?'#F5C6C0':'#E8E5DF'};">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:700;color:#CFB87C;margin-bottom:4px;">${s.category||'General'}</div>
+            <div style="font-size:13px;color:#1a1a1a;line-height:1.6;">${s.feedback}</div>
+            <div style="font-size:11px;color:#aaa;margin-top:6px;">${s.ts?new Date(s.ts).toLocaleDateString():''}</div>
+          </div>
+          <button onclick="toggleSuggFlag('${s.id}',${!s.flagged})" style="flex-shrink:0;padding:4px 10px;border-radius:6px;border:1px solid ${s.flagged?'#F5C6C0':'#E8E5DF'};background:${s.flagged?'#FDF0EE':'#fff'};font-size:11px;cursor:pointer;color:${s.flagged?'#C0392B':'#777'};">${s.flagged?'🚩 Flagged':'Flag'}</button>
+        </div>
+      </div>`).join('') : `<div style="text-align:center;padding:48px 0;color:#aaa;font-size:14px;">No suggestions yet.</div>`;
+
+    body = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="${sLbl}">Suggestion Box</div>
+        <h2 style="font-size:20px;font-weight:800;font-family:'Playfair Display',serif;margin-top:4px;">${suggs.length} Submission${suggs.length!==1?'s':''}</h2>
+        ${flagged.length?`<div style="font-size:12px;color:#C0392B;margin-top:4px;">🚩 ${flagged.length} flagged</div>`:''}
+      </div>
+      ${suggs.length?`<button onclick="(${exportCSV})()" style="${pBtn()}padding:9px 18px;font-size:13px;">⬇ Export CSV</button>`:''}
+    </div>
+    ${cards}`;
+  }
+
   if(tab==='feeds'){
     const ics = S.icsUrl||'';
     body=`
@@ -963,6 +1007,8 @@ function adminPanel(){
       ${resetRow('🔐','Reset All PINs','Removes every resident\'s saved PIN — they will be prompted to create a new one on next login','resetPins()')}
       ${resetRow('📝','Clear All Notes','Deletes all module notes saved by all residents','resetNotes()')}
       ${resetRow('🏆','Clear All Kudos','Deletes all kudos entries from the database','resetKudos()')}
+      ${resetRow('🗒️','Clear All Evaluations','Deletes all anonymous lecture evaluations from the database','resetEvals()')}
+      ${resetRow('💬','Clear All Suggestions','Deletes all anonymous suggestion box submissions','resetSuggestions()')}
     </div>`;
   }
 
@@ -980,6 +1026,7 @@ function adminPanel(){
       ${tabBtn('events','📅 Events',S.events.length)}
       ${tabBtn('kudos','🏆 Kudos',S.kudos.filter(k=>(Date.now()-k.ts)<30*24*60*60*1000).length)}
       ${tabBtn('evals','📝 Evals',null)}
+      ${tabBtn('suggestions','💬 Suggestions',null)}
       ${tabBtn('feeds','📡 Live Feeds',null)}
       ${tabBtn('danger','⚠️ Reset',null)}
     </div>
@@ -1133,6 +1180,7 @@ function draw(){
   else if(S.view==='notes') main=pgNotes();
   else if(S.view==='podcasts') main=pgPodcasts();
   else if(S.view==='resources') main=pgResources();
+  else if(S.view==='suggestions') main=pgSuggestions();
 
   document.getElementById('app').innerHTML=
     hdr()+
@@ -1319,6 +1367,28 @@ async function resetKudos() {
     draw();
   };
   S.modal = { type:'confirm', data:{ title:'Clear all kudos?', msg:`This will permanently delete all kudos entries for everyone. This cannot be undone.` }};
+  draw();
+}
+
+async function resetSuggestions() {
+  S._confirmFn = async () => {
+    await sb.from('suggestions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    S.suggestions = [];
+    alert('✓ All suggestions cleared.');
+    draw();
+  };
+  S.modal = { type:'confirm', data:{ title:'Clear all suggestions?', msg:`This will permanently delete all suggestion box submissions. This cannot be undone.` }};
+  draw();
+}
+
+async function resetEvals() {
+  S._confirmFn = async () => {
+    await sb.from('evaluations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    S.evaluations = [];
+    alert('✓ All evaluations cleared.');
+    draw();
+  };
+  S.modal = { type:'confirm', data:{ title:'Clear all evaluations?', msg:`This will permanently delete all anonymous lecture evaluations. This cannot be undone.` }};
   draw();
 }
 
@@ -1509,15 +1579,48 @@ async function submitEval(moduleId, courseId, moduleTitle) {
   const text = document.getElementById('eval-text-' + moduleId)?.value.trim();
   if (!text) { alert('Please enter some feedback before submitting.'); return; }
   try {
-    await dbUpsert('evaluations', {
+    const evalRow = {
       module_id: moduleId,
       course_id: courseId,
       module_title: moduleTitle,
       feedback: text,
       flagged: false,
       ts: Date.now()
-    });
+    };
+    await dbUpsert('evaluations', evalRow);
+    S.evaluations = [...(S.evaluations||[]), evalRow];
     localStorage.setItem('al6_eval_' + moduleId, '1');
+
+    // Email notification to admin
+    try {
+      const adminRes = S.residents.find(r => r.year === 'A');
+      const adminEmail = adminRes?.email || 'mitchell.gist@cuanschutz.edu';
+      const emailSettings = await dbGetSetting('email_from', 'AnesLearn <noreply@cuaneslearn.com>');
+      const resendKey = await dbGetSetting('resend_api_key', '');
+      if(resendKey) {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','Authorization':'Bearer '+resendKey},
+          body: JSON.stringify({
+            from: emailSettings,
+            to: [adminEmail],
+            subject: `New Eval: ${moduleTitle}`,
+            html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
+              <h2 style="color:#1B1B1B;">New Lecture Evaluation</h2>
+              <p><strong>Lecture:</strong> ${moduleTitle}</p>
+              <p><strong>Submitted:</strong> ${new Date().toLocaleDateString()}</p>
+              <div style="background:#F4F2EE;border-radius:8px;padding:16px;margin:16px 0;">
+                <p style="margin:0;font-size:15px;line-height:1.6;">${text.replace(/
+/g,'<br>')}</p>
+              </div>
+              <p style="font-size:12px;color:#aaa;">This evaluation was submitted anonymously via AnesLearn.</p>
+              <a href="https://cuaneslearn.com" style="font-size:12px;color:#CFB87C;">View in Admin Panel →</a>
+            </div>`
+          })
+        });
+      }
+    } catch(emailErr) { console.warn('Eval email failed:', emailErr); }
+
     draw();
   } catch(e) {
     alert('Could not submit feedback. Please try again.');
@@ -1533,6 +1636,16 @@ async function toggleEvalFlag(evalId, flagged) {
     if(idx >= 0) S.evaluations[idx].flagged = flagged;
     draw();
   } catch(e) { console.error('toggleEvalFlag error:', e); }
+}
+
+
+async function toggleSuggFlag(suggId, flagged) {
+  try {
+    await sb.from('suggestions').update({flagged}).eq('id', suggId);
+    const idx = S.suggestions.findIndex(s => s.id === suggId);
+    if(idx >= 0) S.suggestions[idx].flagged = flagged;
+    draw();
+  } catch(e) { console.error('toggleSuggFlag error:', e); }
 }
 
 
@@ -2467,6 +2580,106 @@ async function submitKudos() {
   draw();
 }
 
+// ─── SUGGESTION BOX ───────────────────────────────────────────────────────────
+function pgSuggestions() {
+  const submitted = localStorage.getItem('al6_suggested_' + (S.activeResidentId||''));
+  const gifUrl = 'https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif';
+
+  const formH = submitted ? `
+    <div style="text-align:center;padding:32px 0;">
+      <div style="font-size:48px;margin-bottom:12px;">✅</div>
+      <div style="font-weight:700;font-size:16px;color:#2D7D4F;">Suggestion submitted!</div>
+      <div style="font-size:13px;color:#aaa;margin-top:6px;">Thanks for the feedback. It's been sent anonymously.</div>
+      <button onclick="localStorage.removeItem('al6_suggested_${S.activeResidentId||''}');draw()" style="${gBtn}margin-top:16px;font-size:12px;padding:6px 14px;">Submit another</button>
+    </div>` : `
+    <div style="margin-bottom:16px;">
+      <label style="font-size:13px;font-weight:700;color:#1a1a1a;display:block;margin-bottom:6px;">Category</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;" id="sugg-cats">
+        ${['💡 Idea','👍 Positive','⚠️ Concern','🗓️ Scheduling','🎓 Education','❓ Other'].map(c =>
+          `<button onclick="document.querySelectorAll('#sugg-cats button').forEach(b=>b.style.background='#fff');document.querySelectorAll('#sugg-cats button').forEach(b=>b.style.color='#1a1a1a');this.style.background='#1B1B1B';this.style.color='#fff';S._suggCat='${c}'" 
+           style="padding:7px 14px;border-radius:20px;border:1.5px solid #E8E5DF;background:#fff;font-size:13px;cursor:pointer;font-weight:600;">${c}</button>`
+        ).join('')}
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:13px;font-weight:700;color:#1a1a1a;display:block;margin-bottom:6px;">Your suggestion</label>
+      <textarea id="sugg-text" placeholder="Share your thoughts — positive or negative, big or small..." style="width:100%;box-sizing:border-box;padding:12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:13px;font-family:inherit;resize:vertical;min-height:120px;outline:none;" onfocus="this.style.borderColor='#CFB87C'" onblur="this.style.borderColor='#E8E5DF'"></textarea>
+    </div>
+    <div style="display:flex;justify-content:flex-end;">
+      <button onclick="submitSuggestion()" style="${pBtn()}padding:10px 24px;font-size:14px;">Submit Anonymously</button>
+    </div>`;
+
+  return `<div class="fade">
+  <div style="margin-bottom:24px;">
+    <div style="${sLbl}margin-bottom:6px;">Program Feedback</div>
+    <h1 style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;">Suggestion Box</h1>
+  </div>
+
+  <!-- Ted Lasso GIF card -->
+  <div style="${card}overflow:hidden;margin-bottom:24px;display:flex;flex-direction:column;align-items:center;padding:24px;text-align:center;">
+    <img src="https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExdnVzZmd6cXE2NWd3dXNqNWNhMGNtcWZxanpnYnVzNnlqZXJhZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0MYGb1LuZ3n7dRnO/giphy.gif" 
+      style="width:100%;max-width:420px;border-radius:10px;margin-bottom:16px;" 
+      alt="Ted Lasso suggestion box"
+      onerror="this.style.display='none'">
+    <div style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:4px;">"I asked Nate to make us a good old-fashioned suggestion box."</div>
+    <div style="font-size:13px;color:#aaa;">All submissions are completely anonymous. No names, no IDs.</div>
+  </div>
+
+  <!-- Form -->
+  <div style="${card}padding:24px;">
+    ${formH}
+  </div>
+</div>`;
+}
+
+async function submitSuggestion() {
+  const text = document.getElementById('sugg-text')?.value.trim();
+  const cat = S._suggCat || 'General';
+  if(!text) { alert('Please enter a suggestion before submitting.'); return; }
+  try {
+    const row = { feedback: text, category: cat, flagged: false, ts: Date.now() };
+    await dbUpsert('suggestions', row);
+    S.suggestions = [...(S.suggestions||[]), row];
+    localStorage.setItem('al6_suggested_' + (S.activeResidentId||''), '1');
+    S._suggCat = null;
+
+    // Email admin
+    try {
+      const adminRes = S.residents.find(r => r.year === 'A');
+      const adminEmail = adminRes?.email || 'mitchell.gist@cuanschutz.edu';
+      const emailFrom = await dbGetSetting('email_from', 'AnesLearn <noreply@cuaneslearn.com>');
+      const resendKey = await dbGetSetting('resend_api_key', '');
+      if(resendKey) {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','Authorization':'Bearer '+resendKey},
+          body: JSON.stringify({
+            from: emailFrom,
+            to: [adminEmail],
+            subject: `New Suggestion [${cat}]`,
+            html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
+              <h2 style="color:#1B1B1B;">New Suggestion Box Submission</h2>
+              <p><strong>Category:</strong> ${cat}</p>
+              <p><strong>Submitted:</strong> ${new Date().toLocaleDateString()}</p>
+              <div style="background:#F4F2EE;border-radius:8px;padding:16px;margin:16px 0;">
+                <p style="margin:0;font-size:15px;line-height:1.6;">${text.replace(/\n/g,'<br>')}</p>
+              </div>
+              <p style="font-size:12px;color:#aaa;">Submitted anonymously via AnesLearn Suggestion Box.</p>
+              <a href="https://cuaneslearn.com" style="font-size:12px;color:#CFB87C;">View in Admin Panel →</a>
+            </div>`
+          })
+        });
+      }
+    } catch(e) { console.warn('Suggestion email failed:', e); }
+
+    draw();
+  } catch(e) {
+    alert('Could not submit. Please try again.');
+    console.error('submitSuggestion error:', e);
+  }
+}
+
+
 // ─── RESOURCES PAGE ───────────────────────────────────────────────────────────
 function pgResources() {
   const links = [
@@ -3234,13 +3447,14 @@ async function bootstrap() {
     }
 
     // Load all data in parallel
-    const [resRows, courseRows, eventRows, kudosRows, quizRows, evalRows, icsUrlSetting, podcastLibSetting] = await Promise.all([
+    const [resRows, courseRows, eventRows, kudosRows, quizRows, evalRows, suggRows, icsUrlSetting, podcastLibSetting] = await Promise.all([
       dbGet('residents'),
       dbGet('courses'),
       dbGet('events'),
       dbGet('kudos'),
       dbGet('quizzes'),
       dbGet('evaluations'),
+      dbGet('suggestions'),
       dbGetSetting('icsUrl', ''),
       dbGetSetting('podcast_library', '[]'),
     ]);
@@ -3276,6 +3490,7 @@ async function bootstrap() {
 
     // Hydrate evaluations
     S.evaluations = evalRows || [];
+    S.suggestions = suggRows || [];
 
     // Hydrate ICS url
     S.icsUrl = icsUrlSetting || '';
