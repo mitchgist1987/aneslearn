@@ -1610,8 +1610,7 @@ async function submitEval(moduleId, courseId, moduleTitle) {
               <p><strong>Lecture:</strong> ${moduleTitle}</p>
               <p><strong>Submitted:</strong> ${new Date().toLocaleDateString()}</p>
               <div style="background:#F4F2EE;border-radius:8px;padding:16px;margin:16px 0;">
-                <p style="margin:0;font-size:15px;line-height:1.6;">${text.replace(/
-/g,'<br>')}</p>
+                <p style="margin:0;font-size:15px;line-height:1.6;">${text.replace(/\n/g,'<br>')}</p>
               </div>
               <p style="font-size:12px;color:#aaa;">This evaluation was submitted anonymously via AnesLearn.</p>
               <a href="https://cuaneslearn.com" style="font-size:12px;color:#CFB87C;">View in Admin Panel →</a>
