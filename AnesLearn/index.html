@@ -801,6 +801,74 @@ async function addModuleBelow() {
 }
 
 
+// ─── COURSE MANAGEMENT ────────────────────────────────────────────────────────
+function showEditCourse() { S.editingCourse = true; draw(); }
+
+async function saveCourseEdits() {
+  const c = getCourse();
+  if(!c) return;
+  const title    = document.getElementById('ec-title')?.value.trim();
+  const subtitle = document.getElementById('ec-subtitle')?.value.trim();
+  const icon     = document.getElementById('ec-icon')?.value.trim() || '📋';
+  const category = document.getElementById('ec-cat')?.value.trim();
+  if(!title) { alert('Title is required.'); return; }
+  const updCourse = {...c, title, subtitle, icon, category};
+  S.courses = S.courses.map(x => x.id===c.id ? updCourse : x);
+  S.editingCourse = false;
+  await persist('courses', S.courses);
+}
+
+async function deleteCourse() {
+  const c = getCourse();
+  if(!c) return;
+  S._confirmFn = async () => {
+    S.courses = S.courses.filter(x => x.id !== c.id);
+    await persist('courses', S.courses);
+    go('courses');
+  };
+  S.modal = {type:'confirm', data:{title:`Delete "${c.title}"?`, msg:'This will permanently delete this entire course and ALL its modules. This cannot be undone.'}};
+  draw();
+}
+
+async function addNewCourse() {
+  const newCourse = {
+    id: Date.now(),
+    icon: '📋',
+    title: 'New Course',
+    subtitle: '',
+    category: 'New',
+    modules: []
+  };
+  S.courses = [...S.courses, newCourse];
+  await persist('courses', S.courses);
+  S.courseId = newCourse.id;
+  S.editingCourse = true;
+  go('course');
+}
+
+async function addNewModule() {
+  const c = getCourse();
+  if(!c) return;
+  const newMod = {
+    id: Date.now(),
+    week: (c.modules.length > 0 ? Math.max(...c.modules.map(m => m.week||0)) : 0) + 1,
+    title: 'New Module',
+    faculty: '',
+    date: '',
+    subspecialty: '',
+    reading: '',
+    advanced: '',
+    content: [],
+    completed: false
+  };
+  const updCourse = {...c, modules: [...c.modules, newMod]};
+  S.courses = S.courses.map(x => x.id===c.id ? updCourse : x);
+  await persist('courses', S.courses);
+  S.moduleId = newMod.id;
+  S.editingModule = true;
+  go('module');
+}
+
 // ─── CALENDAR ─────────────────────────────────────────────────────────────────
 function pgCalendar(){
   const icsReady = (S.icsEvents||[]).length > 0;
