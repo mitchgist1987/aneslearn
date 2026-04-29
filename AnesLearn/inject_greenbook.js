@@ -1,22 +1,16 @@
 /**
  * inject_greenbook.js
- * 
- * Reads the latest markdown files from ./cugammadex/docs/
- * Converts them to HTML and injects into AnesLearn/index.html
- * replacing the getRotationContent() function.
- * 
- * Run automatically by Netlify build script (build.sh)
- * Or manually: node inject_greenbook.js
+ * Runs from within the AnesLearn/ directory (Netlify base dir)
+ * Reads markdown from ./cugammadex/docs/ and injects into ./index.html
  */
 
 const fs = require('fs');
 const path = require('path');
 
-const GREENBOOK_DIR = './cugammadex/docs';
-const SOURCE_HTML = './AnesLearn/index.html';
-const OUT_HTML = './AnesLearn/index.html';
+const GREENBOOK_DIR = path.resolve(__dirname, 'cugammadex/docs');
+const SOURCE_HTML   = path.resolve(__dirname, 'index.html');
+const OUT_HTML      = path.resolve(__dirname, 'index.html');
 
-// File map: section ID -> relative path in greenbook repo
 const FILE_MAP = {
   aps:          'r/aps.md',
   chco:         'r/chco.md',
@@ -46,16 +40,13 @@ const FILE_MAP = {
 };
 
 function mdToHtml(md) {
-  // Strip frontmatter
   if (md.startsWith('---')) {
     const parts = md.split('---');
     if (parts.length >= 3) md = parts.slice(2).join('---').trim();
   }
-
   const lines = md.split('\n');
   const out = [];
   let inUl = false, inCode = false, inDetails = false, inTable = false;
-
   for (let line of lines) {
     if (line.trim().startsWith('```')) {
       if (inCode) { out.push('</code></pre>'); inCode = false; }
@@ -63,7 +54,6 @@ function mdToHtml(md) {
       continue;
     }
     if (inCode) { out.push(line.replace(/</g,'&lt;').replace(/>/g,'&gt;')); continue; }
-
     if (line.trim().startsWith('::: details')) {
       const label = line.trim().replace('::: details','').trim();
       out.push(`<details style="margin:8px 0;border:1px solid #E8E5DF;border-radius:8px;padding:10px 14px;"><summary style="cursor:pointer;font-weight:600;font-size:13px;">${label||'Details'}</summary><div style="margin-top:10px;">`);
@@ -71,17 +61,12 @@ function mdToHtml(md) {
     }
     if (line.trim() === ':::' && inDetails) { out.push('</div></details>'); inDetails = false; continue; }
     if (line.trim().startsWith(':::')) continue;
-
-    if (inUl && !line.startsWith('- ') && !line.startsWith('  - ')) {
-      out.push('</ul>'); inUl = false;
-    }
-
+    if (inUl && !line.startsWith('- ') && !line.startsWith('  - ')) { out.push('</ul>'); inUl = false; }
     const inline = s => s
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/`(.*?)`/g, '<code style="background:#F4F2EE;padding:1px 5px;border-radius:4px;font-size:12px;">$1</code>')
       .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:#CFB87C;">$1</a>');
-
     if (line.startsWith('#### ')) out.push(`<h4 style="font-size:14px;font-weight:700;margin:16px 0 6px;">${inline(line.slice(5))}</h4>`);
     else if (line.startsWith('### ')) out.push(`<h3 style="font-size:16px;font-weight:700;margin:20px 0 8px;color:#A8924A;">${inline(line.slice(4))}</h3>`);
     else if (line.startsWith('## ')) out.push(`<h2 style="font-size:18px;font-weight:800;font-family:'Playfair Display',serif;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid #E8E5DF;">${inline(line.slice(3))}</h2>`);
@@ -110,7 +95,6 @@ function mdToHtml(md) {
   return out.join('\n');
 }
 
-// Read and convert all files
 const contentMap = {};
 for (const [id, relPath] of Object.entries(FILE_MAP)) {
   const fullPath = path.join(GREENBOOK_DIR, relPath);
@@ -128,17 +112,15 @@ for (const [id, relPath] of Object.entries(FILE_MAP)) {
   }
 }
 
-// Build new getRotationContent function
 const cases = Object.entries(contentMap)
   .map(([k,v]) => `    case '${k}': return \`${v}\`;`)
   .join('\n');
 
 const newFn = `\nfunction getRotationContent(sec) {\n  switch(sec) {\n${cases}\n    default: return getRotationContent('overview');\n  }\n}\n`;
 
-// Inject into HTML
 let html = fs.readFileSync(SOURCE_HTML, 'utf8');
 const fnStart = html.indexOf('\nfunction getRotationContent(sec)');
-const fnEnd = html.indexOf('\nfunction pgResources()');
+const fnEnd   = html.indexOf('\nfunction pgResources()');
 
 if (fnStart === -1 || fnEnd === -1) {
   console.error('ERROR: Could not find getRotationContent in index.html');
@@ -147,5 +129,4 @@ if (fnStart === -1 || fnEnd === -1) {
 
 html = html.slice(0, fnStart) + newFn + html.slice(fnEnd);
 fs.writeFileSync(OUT_HTML, html);
-console.log(`\n✅ Injected ${Object.keys(contentMap).length} rotation guides`);
-console.log(`   Output: ${OUT_HTML} (${(html.length/1024).toFixed(0)} KB)`);
+console.log(`\n✅ Injected ${Object.keys(contentMap).length} rotation guides (${(html.length/1024).toFixed(0)} KB)`);
