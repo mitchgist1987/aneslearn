@@ -160,9 +160,9 @@ const S={
   adminUnlocked:false, showAdmin:false, adminTab:'residents', resourceSection:'rotation', rotationSubsec:'overview',
   modal:null, _confirmFn:null,
   courseFilter:'all', moduleTab:'content',
-  activePlayer:null, showAddContent:false, editingContentId:null, editingModule:false, editingCourse:false,
+  activePlayer:null, showAddContent:false, editingContentId:null, editingModule:false, editingCourse:false, showAddResource:false, showAddRotResource:false, showAddProfResource:false,
   calYear:2026, calMonth:2, calSel:null,
-  kudos: [], evaluations: [], suggestions: [], adminResources: [], openPodcastFolders: {},
+  kudos: [], evaluations: [], suggestions: [], adminResources: [], rotationResources: [], professionalResources: [], openPodcastFolders: {},
   activeQuizId:null, quizAnswers:{}, quizSubmitted:false, quizzes:[], quizResponses:{},
   icsUrl: '',
   icsFetching: false, icsLastFetched: null, icsEvents:[],
@@ -1209,6 +1209,17 @@ function getAdminBody(tab) {
       </button>
     </div>
 
+    <!-- Change Admin PIN -->
+    <div style="${card}padding:18px 20px;margin-bottom:20px;border:1.5px solid #E2CFA0;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">🔑 Change Admin PIN</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:14px;">Update the admin PIN without touching Supabase.</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input id="new-admin-pin" type="password" placeholder="New PIN" maxlength="12" style="padding:8px 12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:14px;width:140px;letter-spacing:.2em;" oninput="this.style.borderColor='#CFB87C'">
+        <input id="new-admin-pin-confirm" type="password" placeholder="Confirm PIN" maxlength="12" style="padding:8px 12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:14px;width:140px;letter-spacing:.2em;" oninput="this.style.borderColor='#CFB87C'">
+        <button onclick="changeAdminPin()" style="${pBtn()}padding:8px 18px;font-size:13px;">Save PIN</button>
+      </div>
+    </div>
+
     <div style="display:grid;gap:12px;">
       ${resetRow('🔐','Reset All PINs','Removes every resident\'s saved PIN — they will be prompted to create a new one on next login','resetPins()')}
       ${resetRow('📝','Clear All Notes','Deletes all module notes saved by all residents','resetNotes()')}
@@ -1551,6 +1562,24 @@ function adminDeleteKudo(id) {
   S.modal = { type:'confirm', data:{ title:'Delete this kudos?', msg:'This will permanently remove it for everyone.' }};
   draw();
 }
+
+async function changeAdminPin() {
+  const pin = document.getElementById('new-admin-pin')?.value.trim();
+  const confirm = document.getElementById('new-admin-pin-confirm')?.value.trim();
+  if(!pin) { alert('Please enter a new PIN.'); return; }
+  if(pin.length < 4) { alert('PIN must be at least 4 characters.'); return; }
+  if(pin !== confirm) { alert('PINs do not match.'); return; }
+  try {
+    await sb.from('settings').upsert({key:'admin_pin', value: pin});
+    document.getElementById('new-admin-pin').value = '';
+    document.getElementById('new-admin-pin-confirm').value = '';
+    alert('✓ Admin PIN updated successfully.');
+  } catch(e) {
+    alert('Failed to update PIN. Please try again.');
+    console.error('changeAdminPin error:', e);
+  }
+}
+
 
 async function resetPins() {
   S._confirmFn = async () => {
@@ -5729,6 +5758,66 @@ function getRotationContent(sec) {
   }
 }
 
+// ─── SHARED RESOURCE ADDER ────────────────────────────────────────────────────
+function resourceAdderHTML(key, showFlag, resources) {
+  const formH = window['S'][showFlag] ? `
+    <div style="padding:16px 18px;background:#FAFAFA;border:1.5px solid #E2CFA0;border-radius:10px;margin-bottom:12px;">
+      <input id="${key}-label" placeholder="Resource name" style="width:100%;padding:8px 12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:13px;margin-bottom:8px;box-sizing:border-box;">
+      <input id="${key}-url" placeholder="URL (https://...)" style="width:100%;padding:8px 12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:13px;margin-bottom:8px;box-sizing:border-box;">
+      <input id="${key}-desc" placeholder="Description (optional)" style="width:100%;padding:8px 12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:13px;margin-bottom:10px;box-sizing:border-box;">
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button onclick="S.${showFlag}=false;draw()" style="${gBtn}padding:7px 14px;font-size:12px;">Cancel</button>
+        <button onclick="saveResourceItem('${key}','${showFlag}')" style="${pBtn()}padding:7px 14px;font-size:12px;">Save</button>
+      </div>
+    </div>` : '';
+
+  const listH = resources.length ? `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-top:12px;">
+      ${resources.map((r,i) => `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border:1.5px solid #E8E5DF;border-radius:10px;">
+        <span style="font-size:20px;">📄</span>
+        <div style="flex:1;min-width:0;">
+          <a href="${r.url}" target="_blank" rel="noopener" style="font-weight:700;font-size:13px;color:#1a1a1a;text-decoration:none;">${r.label}</a>
+          ${r.desc ? `<div style="font-size:11px;color:#aaa;">${r.desc}</div>` : ''}
+        </div>
+        ${S.adminUnlocked ? `<button onclick="deleteResourceItem('${key}','${showFlag}',${i})" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:16px;padding:2px;">✕</button>` : ''}
+      </div>`).join('')}
+    </div>` : '';
+
+  return `
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid #F0EDE8;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="${sLbl}">Additional Resources</div>
+        ${S.adminUnlocked ? `<button onclick="S.${showFlag}=!S.${showFlag};draw()" style="${pBtn()}padding:6px 14px;font-size:12px;">+ Add Resource</button>` : ''}
+      </div>
+      ${formH}
+      ${listH}
+      ${!resources.length && !S.adminUnlocked ? '<div style="font-size:12px;color:#aaa;">No additional resources added yet.</div>' : ''}
+    </div>`;
+}
+
+async function saveResourceItem(key, showFlag) {
+  const label = document.getElementById(key+'-label')?.value.trim();
+  const url   = document.getElementById(key+'-url')?.value.trim();
+  const desc  = document.getElementById(key+'-desc')?.value.trim();
+  if(!label||!url) { alert('Name and URL required.'); return; }
+  const stateKey = key === 'admin_resources' ? 'adminResources' : key === 'rotation_resources' ? 'rotationResources' : 'professionalResources';
+  const resources = [...(S[stateKey]||[]), {label, url, desc}];
+  S[stateKey] = resources;
+  await sb.from('settings').upsert({key, value: JSON.stringify(resources)});
+  S[showFlag] = false;
+  draw();
+}
+
+async function deleteResourceItem(key, showFlag, idx) {
+  if(!confirm('Remove this resource?')) return;
+  const stateKey = key === 'admin_resources' ? 'adminResources' : key === 'rotation_resources' ? 'rotationResources' : 'professionalResources';
+  const resources = (S[stateKey]||[]).filter((_,i) => i !== idx);
+  S[stateKey] = resources;
+  await sb.from('settings').upsert({key, value: JSON.stringify(resources)});
+  draw();
+}
+
+
 function pgResources() {
   const sec = S.resourceSection || 'rotation';
 
@@ -5943,8 +6032,9 @@ function pgResources() {
         <span style="font-size:14px;color:#0078D4;font-weight:700;">Open ↗</span>
       </a>
       <div style="font-size:12px;color:#aaa;padding:12px;background:#F4F2EE;border-radius:8px;">
-        💡 More resources will be added here over time. Contact the program coordinators to suggest additions.
+        💡 More resources will be added here over time. ${S.adminUnlocked ? 'Use the button below to add links.' : 'Contact the program coordinators to suggest additions.'}
       </div>
+      ${resourceAdderHTML('professional_resources', 'showAddProfResource', S.professionalResources||[])}
     </div>
   </div>`;
 }
@@ -6108,10 +6198,13 @@ function pgPodcasts() {
 
   // ── Group into folders ─────────────────────────────────────────────────────
   const getFolder = (ep) => {
-    if (ep.source) return ep.source;
+    // ACCRAC episodes — from library or module-linked
     if (ep.url && ep.url.includes('accrac.com')) return 'ACCRAC';
-    if (ep.url && ep.url.includes('spotify.com')) return 'Spotify';
-    if (ep.url && ep.url.includes('youtube.com')) return 'YouTube';
+    if (ep.url && ep.url.includes('spotify.com') && ep.source !== 'module') return 'Spotify';
+    // Module-linked non-ACCRAC episodes — group by course name
+    if (ep.source === 'module') return ep.course?.title || 'Modules';
+    // Library episodes with explicit source label
+    if (ep.source && ep.source !== 'standalone') return ep.source;
     return 'Other';
   };
 
@@ -6733,7 +6826,7 @@ async function bootstrap() {
     }
 
     // Load all data in parallel
-    const [resRows, courseRows, eventRows, kudosRows, quizRows, evalRows, suggRows, icsUrlSetting, podcastLibSetting, adminResourcesSetting] = await Promise.all([
+    const [resRows, courseRows, eventRows, kudosRows, quizRows, evalRows, suggRows, icsUrlSetting, podcastLibSetting, adminResourcesSetting, rotResourcesSetting, profResourcesSetting] = await Promise.all([
       dbGet('residents'),
       dbGet('courses'),
       dbGet('events'),
@@ -6744,6 +6837,8 @@ async function bootstrap() {
       dbGetSetting('icsUrl', ''),
       dbGetSetting('podcast_library', '[]'),
       dbGetSetting('admin_resources', '[]'),
+      dbGetSetting('rotation_resources', '[]'),
+      dbGetSetting('professional_resources', '[]'),
     ]);
 
     // Hydrate residents
@@ -6778,6 +6873,8 @@ async function bootstrap() {
     // Hydrate evaluations
     S.evaluations = evalRows || [];
     try { S.adminResources = JSON.parse(adminResourcesSetting || '[]'); } catch { S.adminResources = []; }
+    try { S.rotationResources = JSON.parse(rotResourcesSetting || '[]'); } catch { S.rotationResources = []; }
+    try { S.professionalResources = JSON.parse(profResourcesSetting || '[]'); } catch { S.professionalResources = []; }
     S.suggestions = suggRows || [];
 
     // Hydrate ICS url
