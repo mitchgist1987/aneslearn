@@ -1410,7 +1410,7 @@ function draw(){
   else if(S.view==='kudos') main=pgKudos();
   else if(S.view==='notes') main=pgNotes();
   else if(S.view==='podcasts') main=pgPodcasts();
-  else if(S.view==='resources') { try { main=pgResources(); } catch(e) { console.error('pgResources error:', e); main=`<div style="padding:40px;color:red;font-family:monospace;font-size:12px;"><strong>Resources Error:</strong><br>${e.message}<br><pre>${e.stack}</pre></div>`; } }
+  else if(S.view==='resources') main=pgResources();
   else if(S.view==='suggestions') main=pgSuggestions();
   else if(S.view==='admin') main=pgAdminFull();
 
@@ -5760,7 +5760,8 @@ function getRotationContent(sec) {
 
 // ─── SHARED RESOURCE ADDER ────────────────────────────────────────────────────
 function resourceAdderHTML(key, showFlag, resources) {
-  const formH = window['S'][showFlag] ? `
+  const showForm = S[showFlag] || false;
+  const formH = showForm ? `
     <div style="padding:16px 18px;background:#FAFAFA;border:1.5px solid #E2CFA0;border-radius:10px;margin-bottom:12px;">
       <input id="${key}-label" placeholder="Resource name" style="width:100%;padding:8px 12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:13px;margin-bottom:8px;box-sizing:border-box;">
       <input id="${key}-url" placeholder="URL (https://...)" style="width:100%;padding:8px 12px;border-radius:8px;border:1.5px solid #E8E5DF;font-size:13px;margin-bottom:8px;box-sizing:border-box;">
