@@ -203,7 +203,11 @@ if (fnStart === -1 || fnEnd === -1) {
   process.exit(1);
 }
 
-html = html.slice(0, fnStart) + newFn + html.slice(fnEnd);
+// fnEnd points to 
+// ─── END ROTATION CONTENT ───
+// We need to skip that line in the old content and add a new sentinel
+const fnEndLineEnd = fnEnd + html.slice(fnEnd).indexOf('\n') + 1;
+html = html.slice(0, fnStart) + newFn + '\n// ─── END ROTATION CONTENT ───\n' + html.slice(fnEndLineEnd);
 fs.writeFileSync(INDEX_PATH, html);
 console.log(`\n✅ Injected ${Object.keys(contentMap).length} rotation guides`);
 console.log(`   Output: ${INDEX_PATH} (${(html.length / 1024).toFixed(0)} KB)`);
