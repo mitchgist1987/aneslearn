@@ -162,7 +162,7 @@ const S={
   courseFilter:'all', moduleTab:'content',
   activePlayer:null, showAddContent:false, editingContentId:null, editingModule:false, editingCourse:false, showAddResource:false, showAddRotResource:false, showAddProfResource:false,
   calYear:2026, calMonth:2, calSel:null,
-  kudos: [], evaluations: [], suggestions: [], adminResources: [], rotationResources: [], professionalResources: [], openPodcastFolders: {}, openQuizFolders: {},
+  kudos: [], evaluations: [], suggestions: [], adminResources: [], rotationResources: [], professionalResources: [], openPodcastFolders: {}, openQuizFolders: {}, showImportForm: false,
   activeQuizId:null, quizAnswers:{}, quizSubmitted:false, quizzes:[], quizResponses:{},
   icsUrl: '',
   icsFetching: false, icsLastFetched: null, icsEvents:[],
@@ -3141,6 +3141,42 @@ async function deleteResourceItem(key, showFlag, idx) {
 
 
 
+
+function getRotationContent(sec) {
+  var _map = {
+  "overview": "<div><h2 style=\"font-size:18px;font-weight:800;margin-bottom:4px;\">Green Book</h2><p style=\"font-size:13px;color:#aaa;margin-bottom:16px;\">Select a rotation guide from the list.</p><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Service</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='aps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">💉 Acute Pain Service</button><button onclick=\"S.rotationSubsec='nora';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📡 NORA</button><button onclick=\"S.rotationSubsec='pps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📋 Pre-Procedure Services</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">General OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='uch';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏛️ UCH</button><button onclick=\"S.rotationSubsec='va';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🎖️ Rocky Mountain VA</button><button onclick=\"S.rotationSubsec='dh';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🚑 Denver Health</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Subspecialty OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🤱 OB Anesthesia</button><button onclick=\"S.rotationSubsec='txp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🫀 Transplant</button><button onclick=\"S.rotationSubsec='ct';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">❤️ Cardiothoracic</button><button onclick=\"S.rotationSubsec='neuro';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🧠 Neuroanesthesia</button><button onclick=\"S.rotationSubsec='chco';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👶 Children's (CHCO)</button><button onclick=\"S.rotationSubsec='cp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩺 Chronic Pain</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">ICU</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='sticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩻 STICU</button><button onclick=\"S.rotationSubsec='cticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏥 CTICU</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">CA-3</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='senior';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">⭐ Senior Month</button><button onclick=\"S.rotationSubsec='pacu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🛏️ PACU</button><button onclick=\"S.rotationSubsec='pocus';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔊 POCUS</button><button onclick=\"S.rotationSubsec='inverness';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏔️ Inverness</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Reference</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob-cookbook';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📖 OB Cookbook</button><button onclick=\"S.rotationSubsec='ct-att';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👨‍⚕️ CT Attending Prefs</button><button onclick=\"S.rotationSubsec='vpn';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔐 VPN / Remote Access</button><button onclick=\"S.rotationSubsec='contacts';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📞 Contacts</button><button onclick=\"S.rotationSubsec='qgenda';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📅 QGenda Glossary</button><button onclick=\"S.rotationSubsec='interns';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🌱 Intern Info</button><button onclick=\"S.rotationSubsec='links';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔗 Useful Links</button></div></div></div>",
+  "aps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for aps.</p>",
+  "chco": "<p style=\"color:#aaa;font-size:13px;\">Content not available for chco.</p>",
+  "cp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cp.</p>",
+  "ct": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct.</p>",
+  "cticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cticu.</p>",
+  "dh": "<p style=\"color:#aaa;font-size:13px;\">Content not available for dh.</p>",
+  "inverness": "<p style=\"color:#aaa;font-size:13px;\">Content not available for inverness.</p>",
+  "neuro": "<p style=\"color:#aaa;font-size:13px;\">Content not available for neuro.</p>",
+  "nora": "<p style=\"color:#aaa;font-size:13px;\">Content not available for nora.</p>",
+  "ob": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob.</p>",
+  "pacu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pacu.</p>",
+  "pocus": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pocus.</p>",
+  "pps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pps.</p>",
+  "senior": "<p style=\"color:#aaa;font-size:13px;\">Content not available for senior.</p>",
+  "sticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for sticu.</p>",
+  "txp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for txp.</p>",
+  "uch": "<p style=\"color:#aaa;font-size:13px;\">Content not available for uch.</p>",
+  "va": "<p style=\"color:#aaa;font-size:13px;\">Content not available for va.</p>",
+  "ob-cookbook": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob-cookbook.</p>",
+  "ct-att": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct-att.</p>",
+  "vpn": "<p style=\"color:#aaa;font-size:13px;\">Content not available for vpn.</p>",
+  "contacts": "<p style=\"color:#aaa;font-size:13px;\">Content not available for contacts.</p>",
+  "qgenda": "<p style=\"color:#aaa;font-size:13px;\">Content not available for qgenda.</p>",
+  "interns": "<p style=\"color:#aaa;font-size:13px;\">Content not available for interns.</p>",
+  "links": "<p style=\"color:#aaa;font-size:13px;\">Content not available for links.</p>"
+  };
+  return _map[sec] || '<p style="color:#aaa;font-size:13px;">Select a rotation from the menu.</p>';
+}
+// ─── END ROTATION CONTENT ───
+
+
+
 function getRotationContent(sec) {
   var _map = {
   "overview": "<div><h2 style=\"font-size:18px;font-weight:800;margin-bottom:4px;\">Green Book</h2><p style=\"font-size:13px;color:#aaa;margin-bottom:16px;\">Select a rotation guide from the list.</p><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Service</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='aps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">💉 Acute Pain Service</button><button onclick=\"S.rotationSubsec='nora';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📡 NORA</button><button onclick=\"S.rotationSubsec='pps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📋 Pre-Procedure Services</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">General OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='uch';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏛️ UCH</button><button onclick=\"S.rotationSubsec='va';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🎖️ Rocky Mountain VA</button><button onclick=\"S.rotationSubsec='dh';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🚑 Denver Health</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Subspecialty OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🤱 OB Anesthesia</button><button onclick=\"S.rotationSubsec='txp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🫀 Transplant</button><button onclick=\"S.rotationSubsec='ct';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">❤️ Cardiothoracic</button><button onclick=\"S.rotationSubsec='neuro';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🧠 Neuroanesthesia</button><button onclick=\"S.rotationSubsec='chco';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👶 Children's (CHCO)</button><button onclick=\"S.rotationSubsec='cp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩺 Chronic Pain</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">ICU</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='sticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩻 STICU</button><button onclick=\"S.rotationSubsec='cticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏥 CTICU</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">CA-3</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='senior';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">⭐ Senior Month</button><button onclick=\"S.rotationSubsec='pacu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🛏️ PACU</button><button onclick=\"S.rotationSubsec='pocus';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔊 POCUS</button><button onclick=\"S.rotationSubsec='inverness';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏔️ Inverness</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Reference</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob-cookbook';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📖 OB Cookbook</button><button onclick=\"S.rotationSubsec='ct-att';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👨‍⚕️ CT Attending Prefs</button><button onclick=\"S.rotationSubsec='vpn';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔐 VPN / Remote Access</button><button onclick=\"S.rotationSubsec='contacts';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📞 Contacts</button><button onclick=\"S.rotationSubsec='qgenda';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📅 QGenda Glossary</button><button onclick=\"S.rotationSubsec='interns';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🌱 Intern Info</button><button onclick=\"S.rotationSubsec='links';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔗 Useful Links</button></div></div></div>",
@@ -3552,7 +3588,9 @@ function pgPodcasts() {
           </button>
         </div>
       </div>
-    </div>` : `<button onclick="S.showPodcastForm=true;S.podcastEditId=null;draw()" style="${pBtn()}display:inline-flex;align-items:center;gap:7px;padding:10px 18px;font-size:13px;margin-bottom:24px;">+ Add Podcast</button>`
+    </div>` : `<button onclick="S.showPodcastForm=true;S.podcastEditId=null;draw()" style="${pBtn()}display:inline-flex;align-items:center;gap:7px;padding:10px 18px;font-size:13px;">+ Add Episode</button>
+    <button onclick="S.showImportForm=true;S.showPodcastForm=false;draw()" style="${gBtn}display:inline-flex;align-items:center;gap:7px;padding:10px 18px;font-size:13px;">📥 Import Series</button>
+  </div>`
   ) : '';
 
   // Episode cards
@@ -3668,6 +3706,7 @@ function pgPodcasts() {
   </div>
 
   ${addFormH}
+  ${importFormH}
 
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
     <div style="position:relative;flex:1;min-width:180px;">
@@ -3709,6 +3748,123 @@ async function deletePodcastItem(epId) {
   S.modal = {type:'confirm', data:{title:'Remove podcast?', msg:'This will remove it from the library. Module-linked episodes are not affected.'}};
   draw();
 }
+
+// ─── SPOTIFY SERIES IMPORT ────────────────────────────────────────────────────
+async function getSpotifyToken() {
+  const clientId     = await dbGetSetting('spotify_client_id', '');
+  const clientSecret = await dbGetSetting('spotify_client_secret', '');
+  if (!clientId || !clientSecret) {
+    throw new Error('Spotify credentials not configured. Add spotify_client_id and spotify_client_secret to Supabase settings.');
+  }
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': 'Basic ' + btoa(clientId + ':' + clientSecret)
+    },
+    body: 'grant_type=client_credentials'
+  });
+  if (!res.ok) throw new Error('Failed to get Spotify token: ' + res.status);
+  const data = await res.json();
+  return data.access_token;
+}
+
+function extractSpotifyShowId(url) {
+  const m = url.match(/spotify\.com\/show\/([A-Za-z0-9]+)/);
+  return m ? m[1] : null;
+}
+
+async function previewImportShow(url) {
+  const el = document.getElementById('import-show-preview');
+  if (!el) return;
+  const showId = extractSpotifyShowId(url);
+  if (!showId) { el.textContent = ''; return; }
+  el.textContent = 'Looking up show...';
+  try {
+    const token = await getSpotifyToken();
+    const res = await fetch('https://api.spotify.com/v1/shows/' + showId + '?market=US', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('Show not found');
+    const show = await res.json();
+    el.innerHTML = '<strong style="color:#1DB954;">✓ ' + show.name + '</strong> — ' + show.total_episodes + ' episodes · by ' + show.publisher;
+    // Pre-fill source label
+    const srcInput = document.getElementById('import-show-source');
+    if (srcInput && !srcInput.value) srcInput.value = show.name;
+  } catch(e) {
+    el.textContent = 'Could not find show: ' + e.message;
+  }
+}
+
+async function importSpotifyShow() {
+  const url    = document.getElementById('import-show-url')?.value.trim();
+  const source = document.getElementById('import-show-source')?.value.trim();
+  const status = document.getElementById('import-status');
+
+  if (!url) { alert('Please enter a Spotify show URL.'); return; }
+  const showId = extractSpotifyShowId(url);
+  if (!showId) { alert('Could not find a show ID in that URL. Use a URL like https://open.spotify.com/show/XXXX'); return; }
+  if (!source) { alert('Please enter a source label (folder name).'); return; }
+
+  if (status) status.textContent = 'Getting access token...';
+
+  try {
+    const token = await getSpotifyToken();
+
+    // Fetch all episodes (paginated, 50 per page)
+    let episodes = [];
+    let offset = 0;
+    const limit = 50;
+    let total = Infinity;
+
+    while (offset < total) {
+      if (status) status.textContent = 'Fetching episodes ' + (offset+1) + '–' + Math.min(offset+limit, total) + '...';
+      const res = await fetch('https://api.spotify.com/v1/shows/' + showId + '/episodes?market=US&limit=' + limit + '&offset=' + offset, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) throw new Error('API error: ' + res.status);
+      const data = await res.json();
+      total = data.total;
+      episodes = episodes.concat(data.items);
+      offset += limit;
+      if (data.items.length === 0) break;
+    }
+
+    if (status) status.textContent = 'Saving ' + episodes.length + ' episodes...';
+
+    // Build podcast library entries
+    const existing = S.podcastLibrary || [];
+    const existingUrls = new Set(existing.map(p => p.url));
+
+    const newEpisodes = episodes
+      .filter(ep => ep && ep.id)
+      .filter(ep => !existingUrls.has('https://open.spotify.com/episode/' + ep.id))
+      .map(ep => ({
+        id: 'spotify_' + ep.id,
+        label: ep.name,
+        source: source,
+        url: 'https://open.spotify.com/episode/' + ep.id,
+        type: 'spotify',
+        description: ep.description ? ep.description.slice(0, 200) : '',
+      }));
+
+    const updatedLib = [...existing, ...newEpisodes];
+    S.podcastLibrary = updatedLib;
+    await sb.from('settings').upsert({ key: 'podcast_library', value: JSON.stringify(updatedLib) });
+
+    S.showImportForm = false;
+    if (status) status.textContent = '';
+
+    alert('✓ Imported ' + newEpisodes.length + ' episodes from "' + source + '"!\n(' + (episodes.length - newEpisodes.length) + ' duplicates skipped)');
+    draw();
+
+  } catch(e) {
+    if (status) status.textContent = '';
+    alert('Import failed: ' + e.message);
+    console.error('importSpotifyShow error:', e);
+  }
+}
+
 
 async function savePodcast(editId) {
   const label = document.getElementById('pc-label')?.value.trim();
