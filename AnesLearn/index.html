@@ -162,7 +162,7 @@ const S={
   courseFilter:'all', moduleTab:'content',
   activePlayer:null, showAddContent:false, editingContentId:null, editingModule:false, editingCourse:false, showAddResource:false, showAddRotResource:false, showAddProfResource:false,
   calYear:2026, calMonth:2, calSel:null,
-  kudos: [], evaluations: [], suggestions: [], adminResources: [], rotationResources: [], professionalResources: [], openPodcastFolders: {},
+  kudos: [], evaluations: [], suggestions: [], adminResources: [], rotationResources: [], professionalResources: [], openPodcastFolders: {}, openQuizFolders: {},
   activeQuizId:null, quizAnswers:{}, quizSubmitted:false, quizzes:[], quizResponses:{},
   icsUrl: '',
   icsFetching: false, icsLastFetched: null, icsEvents:[],
@@ -308,7 +308,7 @@ function hdr(){
   const res=getRes();
   const ini=res?inits(res.name):'DR';
 
-  const navs=[['dashboard','Dashboard'],['courses','Courses'],['quizzes','OR Worksheets'],['kudos','K-Hole Kudos'],['notes','Notes'],['podcasts','Podcasts'],['calendar','Calendar'],['resources','Resources'],['suggestions','Suggestion Box']];
+  const navs=[['dashboard','Dashboard'],['courses','Courses'],['kudos','K-Hole Kudos'],['notes','Notes'],['podcasts','Podcasts'],['calendar','Calendar'],['resources','Resources'],['suggestions','Suggestion Box']];
   const navH=navs.map(([id,lbl])=>{
     const a=S.view===id||(id==='courses'&&(S.view==='course'||S.view==='module'));
     return `<button onclick="go('${id}')" style="background:none;border:none;cursor:pointer;padding:0 12px;height:40px;color:${a?'#CFB87C':'rgba(255,255,255,.45)'};font-weight:${a?700:400};font-size:13px;border-bottom:2px solid ${a?'#CFB87C':'transparent'};white-space:nowrap;">${lbl}</button>`;
@@ -2554,6 +2554,18 @@ function uploadQuiz() {
   fileInput.click();
 }
 
+async function setQuizRotation(id, rotation) {
+  const quizzes = (S.quizzes || []).map(q => q.id === id ? {...q, rotation} : q);
+  S.quizzes = quizzes;
+  const q = quizzes.find(x => x.id === id);
+  if (q) {
+    await quizDBSave({...q, rotation});
+    // Also update in Supabase if stored there
+    try { await sb.from('quizzes').update({rotation}).eq('id', id); } catch(e) {}
+  }
+  draw();
+}
+
 async function handleQuizFiles(files) {
   if (!files.length) return;
   S.modal = { type: 'quizUploading', data: { total: files.length, done: 0, errors: [] } };
@@ -2643,39 +2655,76 @@ function downloadQuizDocx(id) {
 // ─── QUIZ PAGES ───────────────────────────────────────────────────────────────
 function pgQuizzes() {
   const quizzes = S.quizzes || [];
+  const FOLDERS = [
+    {id:'general',   icon:'🏥', label:'General OR'},
+    {id:'neuro',     icon:'🧠', label:'Neuroanesthesia'},
+    {id:'cardiac',   icon:'❤️',  label:'Cardiac Anesthesia'},
+    {id:'ob',        icon:'🤱', label:'Obstetric Anesthesia'},
+    {id:'outpatient',icon:'🏃', label:'Outpatient Anesthesia'},
+    {id:'regional',  icon:'💉', label:'Regional Anesthesia'},
+    {id:'transplant',icon:'🫀', label:'Transplant Anesthesia'},
+    {id:'pediatric', icon:'👶', label:'Pediatric Anesthesia'},
+    {id:'other',     icon:'📋', label:'Other'},
+  ];
+
   const uploadBtn = S.adminUnlocked
     ? `<label style="${pBtn()}padding:9px 20px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
-        📄 Upload Quizzes
+        📄 Upload Worksheet
         <input type="file" accept=".docx" multiple onchange="handleQuizFiles(Array.from(this.files))" style="display:none;"/>
        </label>`
     : '';
 
-  const cards = quizzes.length ? quizzes.map(qz => {
+  const buildCard = (qz) => {
     const n = qz.questions?.length || 0;
-    return `<div style="${card}padding:20px 24px;display:flex;align-items:center;gap:16px;cursor:pointer;" onclick="openQuiz('${qz.id}')">
-      <div style="width:48px;height:48px;border-radius:12px;background:#FAF3DF;border:1.5px solid #E2CFA0;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">📝</div>
+    const folderLabel = (FOLDERS.find(f => f.id === (qz.rotation||'other')) || FOLDERS[8]).label;
+    return `<div style="${card}padding:16px 20px;display:flex;align-items:center;gap:14px;">
+      <div style="width:44px;height:44px;border-radius:10px;background:#FAF3DF;border:1.5px solid #E2CFA0;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📝</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;font-size:15px;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${qz.name}</div>
-        <div style="font-size:12px;color:#aaa;">${n} question${n!==1?'s':''} · ${new Date(qz.created).toLocaleDateString()}</div>
+        <div style="font-weight:700;font-size:14px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${qz.name}</div>
+        <div style="font-size:11px;color:#aaa;">${n} question${n!==1?'s':''} · ${new Date(qz.created||Date.now()).toLocaleDateString()}</div>
       </div>
-      <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:160px;">
-        ${(qz.docxBytes||qz.docx_bytes)?`<button onclick="event.stopPropagation();downloadQuizDocx('${qz.id}')" style="${gBtn}padding:6px 12px;font-size:12px;">⬇ .docx</button>`:''}
-        ${S.adminUnlocked?`<button onclick="event.stopPropagation();deleteQuiz('${qz.id}')" style="${dBtn}padding:6px 10px;font-size:12px;">Delete</button>`:''}
-        <button onclick="event.stopPropagation();openQuiz('${qz.id}')" style="${pBtn()}padding:7px 18px;font-size:13px;">Review →</button>
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+        ${S.adminUnlocked ? `<select onchange="setQuizRotation('${qz.id}',this.value)" style="${inp}width:auto;padding:4px 8px;font-size:11px;cursor:pointer;" onclick="event.stopPropagation()">
+          ${FOLDERS.map(f => `<option value="${f.id}" ${(qz.rotation||'other')===f.id?'selected':''}>${f.icon} ${f.label}</option>`).join('')}
+        </select>` : ''}
+        ${(qz.docxBytes||qz.docx_bytes)?`<button onclick="event.stopPropagation();downloadQuizDocx('${qz.id}')" style="${gBtn}padding:5px 10px;font-size:11px;">⬇</button>`:''}
+        ${S.adminUnlocked?`<button onclick="event.stopPropagation();deleteQuiz('${qz.id}')" style="${dBtn}padding:5px 8px;font-size:11px;">🗑</button>`:''}
+        <button onclick="openQuiz('${qz.id}')" style="${pBtn()}padding:7px 16px;font-size:13px;">Review →</button>
       </div>
     </div>`;
-  }).join('') : `<div style="${card}padding:48px;text-align:center;">
+  };
+
+  const openFolders = S.openQuizFolders || {};
+
+  const foldersH = FOLDERS.map(folder => {
+    const items = quizzes.filter(qz => (qz.rotation || 'other') === folder.id);
+    if (!items.length && !S.adminUnlocked) return '';
+    const isOpen = openFolders[folder.id] !== false;
+    const count = items.length;
+    return '<div style="margin-bottom:8px;">'
+      + '<button onclick="S.openQuizFolders=S.openQuizFolders||{};S.openQuizFolders[\''+folder.id+'\']=' + '!' + isOpen + ';draw()" style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 16px;background:' + (isOpen?'#1B1B1B':'#F4F2EE') + ';border:1.5px solid ' + (isOpen?'#1B1B1B':'#E8E5DF') + ';border-radius:10px;cursor:pointer;margin-bottom:' + (isOpen&&count?'8px':'0') + ';">'
+      + '<span style="font-size:18px;">' + folder.icon + '</span>'
+      + '<span style="flex:1;text-align:left;font-weight:700;font-size:14px;color:' + (isOpen?'#CFB87C':'#1a1a1a') + ';">' + folder.label + '</span>'
+      + '<span style="font-size:12px;color:' + (isOpen?'rgba(255,255,255,.4)':'#aaa') + ';">' + count + ' worksheet' + (count!==1?'s':'') + '</span>'
+      + '<span style="font-size:14px;color:' + (isOpen?'rgba(255,255,255,.5)':'#ccc') + ';">' + (isOpen?'▲':'▼') + '</span>'
+      + '</button>'
+      + (isOpen && count ? '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;">' + items.map(buildCard).join('') + '</div>' : '')
+      + (isOpen && !count && S.adminUnlocked ? '<div style="padding:12px 16px;font-size:12px;color:#aaa;background:#FAFAFA;border:1px solid #E8E5DF;border-radius:8px;margin-bottom:8px;">No worksheets yet — upload a .docx and assign it to this folder.</div>' : '')
+      + '</div>';
+  }).join('');
+
+  const emptyState = !quizzes.length ? `<div style="${card}padding:48px;text-align:center;">
     <div style="font-size:48px;margin-bottom:14px;">📝</div>
-    <div style="font-size:16px;font-weight:700;margin-bottom:8px;">No quizzes yet</div>
-    <div style="font-size:13px;color:#aaa;max-width:380px;margin:0 auto;">${S.adminUnlocked?'Upload one or more Word documents (.docx). The AI will automatically parse the questions and answers.':'No quizzes have been uploaded yet.'}</div>
-  </div>`;
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px;">No worksheets yet</div>
+    <div style="font-size:13px;color:#aaa;max-width:380px;margin:0 auto;">${S.adminUnlocked?'Upload .docx files above. The AI will parse questions automatically.':'No worksheets have been uploaded yet.'}</div>
+  </div>` : '';
 
   return `<div class="fade">
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;flex-wrap:wrap;gap:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;flex-wrap:wrap;gap:10px;">
       <div><div style="${sLbl}margin-bottom:6px;">Intraoperative</div><h1 class="pg-title">OR Worksheets</h1></div>
       ${uploadBtn}
     </div>
-    <div style="display:flex;flex-direction:column;gap:12px;">${cards}</div>
+    ${emptyState || foldersH}
   </div>`;
 }
 
@@ -3090,6 +3139,75 @@ async function deleteResourceItem(key, showFlag, idx) {
 
 // ─── END ROTATION CONTENT ───
 
+
+
+function getRotationContent(sec) {
+  var _map = {
+  "overview": "<div><h2 style=\"font-size:18px;font-weight:800;margin-bottom:4px;\">Green Book</h2><p style=\"font-size:13px;color:#aaa;margin-bottom:16px;\">Select a rotation guide from the list.</p><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Service</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='aps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">💉 Acute Pain Service</button><button onclick=\"S.rotationSubsec='nora';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📡 NORA</button><button onclick=\"S.rotationSubsec='pps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📋 Pre-Procedure Services</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">General OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='uch';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏛️ UCH</button><button onclick=\"S.rotationSubsec='va';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🎖️ Rocky Mountain VA</button><button onclick=\"S.rotationSubsec='dh';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🚑 Denver Health</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Subspecialty OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🤱 OB Anesthesia</button><button onclick=\"S.rotationSubsec='txp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🫀 Transplant</button><button onclick=\"S.rotationSubsec='ct';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">❤️ Cardiothoracic</button><button onclick=\"S.rotationSubsec='neuro';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🧠 Neuroanesthesia</button><button onclick=\"S.rotationSubsec='chco';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👶 Children's (CHCO)</button><button onclick=\"S.rotationSubsec='cp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩺 Chronic Pain</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">ICU</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='sticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩻 STICU</button><button onclick=\"S.rotationSubsec='cticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏥 CTICU</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">CA-3</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='senior';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">⭐ Senior Month</button><button onclick=\"S.rotationSubsec='pacu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🛏️ PACU</button><button onclick=\"S.rotationSubsec='pocus';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔊 POCUS</button><button onclick=\"S.rotationSubsec='inverness';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏔️ Inverness</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Reference</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob-cookbook';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📖 OB Cookbook</button><button onclick=\"S.rotationSubsec='ct-att';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👨‍⚕️ CT Attending Prefs</button><button onclick=\"S.rotationSubsec='vpn';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔐 VPN / Remote Access</button><button onclick=\"S.rotationSubsec='contacts';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📞 Contacts</button><button onclick=\"S.rotationSubsec='qgenda';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📅 QGenda Glossary</button><button onclick=\"S.rotationSubsec='interns';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🌱 Intern Info</button><button onclick=\"S.rotationSubsec='links';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔗 Useful Links</button></div></div></div>",
+  "aps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for aps.</p>",
+  "chco": "<p style=\"color:#aaa;font-size:13px;\">Content not available for chco.</p>",
+  "cp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cp.</p>",
+  "ct": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct.</p>",
+  "cticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cticu.</p>",
+  "dh": "<p style=\"color:#aaa;font-size:13px;\">Content not available for dh.</p>",
+  "inverness": "<p style=\"color:#aaa;font-size:13px;\">Content not available for inverness.</p>",
+  "neuro": "<p style=\"color:#aaa;font-size:13px;\">Content not available for neuro.</p>",
+  "nora": "<p style=\"color:#aaa;font-size:13px;\">Content not available for nora.</p>",
+  "ob": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob.</p>",
+  "pacu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pacu.</p>",
+  "pocus": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pocus.</p>",
+  "pps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pps.</p>",
+  "senior": "<p style=\"color:#aaa;font-size:13px;\">Content not available for senior.</p>",
+  "sticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for sticu.</p>",
+  "txp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for txp.</p>",
+  "uch": "<p style=\"color:#aaa;font-size:13px;\">Content not available for uch.</p>",
+  "va": "<p style=\"color:#aaa;font-size:13px;\">Content not available for va.</p>",
+  "ob-cookbook": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob-cookbook.</p>",
+  "ct-att": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct-att.</p>",
+  "vpn": "<p style=\"color:#aaa;font-size:13px;\">Content not available for vpn.</p>",
+  "contacts": "<p style=\"color:#aaa;font-size:13px;\">Content not available for contacts.</p>",
+  "qgenda": "<p style=\"color:#aaa;font-size:13px;\">Content not available for qgenda.</p>",
+  "interns": "<p style=\"color:#aaa;font-size:13px;\">Content not available for interns.</p>",
+  "links": "<p style=\"color:#aaa;font-size:13px;\">Content not available for links.</p>"
+  };
+  return _map[sec] || '<p style="color:#aaa;font-size:13px;">Select a rotation from the menu.</p>';
+}
+// ─── END ROTATION CONTENT ───
+
+
+function getRotationContent(sec) {
+  var _map = {
+  "overview": "<div><h2 style=\"font-size:18px;font-weight:800;margin-bottom:4px;\">Green Book</h2><p style=\"font-size:13px;color:#aaa;margin-bottom:16px;\">Select a rotation guide from the list.</p><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Service</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='aps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">💉 Acute Pain Service</button><button onclick=\"S.rotationSubsec='nora';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📡 NORA</button><button onclick=\"S.rotationSubsec='pps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📋 Pre-Procedure Services</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">General OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='uch';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏛️ UCH</button><button onclick=\"S.rotationSubsec='va';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🎖️ Rocky Mountain VA</button><button onclick=\"S.rotationSubsec='dh';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🚑 Denver Health</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Subspecialty OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🤱 OB Anesthesia</button><button onclick=\"S.rotationSubsec='txp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🫀 Transplant</button><button onclick=\"S.rotationSubsec='ct';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">❤️ Cardiothoracic</button><button onclick=\"S.rotationSubsec='neuro';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🧠 Neuroanesthesia</button><button onclick=\"S.rotationSubsec='chco';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👶 Children's (CHCO)</button><button onclick=\"S.rotationSubsec='cp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩺 Chronic Pain</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">ICU</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='sticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩻 STICU</button><button onclick=\"S.rotationSubsec='cticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏥 CTICU</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">CA-3</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='senior';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">⭐ Senior Month</button><button onclick=\"S.rotationSubsec='pacu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🛏️ PACU</button><button onclick=\"S.rotationSubsec='pocus';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔊 POCUS</button><button onclick=\"S.rotationSubsec='inverness';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏔️ Inverness</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Reference</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob-cookbook';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📖 OB Cookbook</button><button onclick=\"S.rotationSubsec='ct-att';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👨‍⚕️ CT Attending Prefs</button><button onclick=\"S.rotationSubsec='vpn';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔐 VPN / Remote Access</button><button onclick=\"S.rotationSubsec='contacts';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📞 Contacts</button><button onclick=\"S.rotationSubsec='qgenda';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📅 QGenda Glossary</button><button onclick=\"S.rotationSubsec='interns';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🌱 Intern Info</button><button onclick=\"S.rotationSubsec='links';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔗 Useful Links</button></div></div></div>",
+  "aps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for aps.</p>",
+  "chco": "<p style=\"color:#aaa;font-size:13px;\">Content not available for chco.</p>",
+  "cp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cp.</p>",
+  "ct": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct.</p>",
+  "cticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cticu.</p>",
+  "dh": "<p style=\"color:#aaa;font-size:13px;\">Content not available for dh.</p>",
+  "inverness": "<p style=\"color:#aaa;font-size:13px;\">Content not available for inverness.</p>",
+  "neuro": "<p style=\"color:#aaa;font-size:13px;\">Content not available for neuro.</p>",
+  "nora": "<p style=\"color:#aaa;font-size:13px;\">Content not available for nora.</p>",
+  "ob": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob.</p>",
+  "pacu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pacu.</p>",
+  "pocus": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pocus.</p>",
+  "pps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pps.</p>",
+  "senior": "<p style=\"color:#aaa;font-size:13px;\">Content not available for senior.</p>",
+  "sticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for sticu.</p>",
+  "txp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for txp.</p>",
+  "uch": "<p style=\"color:#aaa;font-size:13px;\">Content not available for uch.</p>",
+  "va": "<p style=\"color:#aaa;font-size:13px;\">Content not available for va.</p>",
+  "ob-cookbook": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob-cookbook.</p>",
+  "ct-att": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct-att.</p>",
+  "vpn": "<p style=\"color:#aaa;font-size:13px;\">Content not available for vpn.</p>",
+  "contacts": "<p style=\"color:#aaa;font-size:13px;\">Content not available for contacts.</p>",
+  "qgenda": "<p style=\"color:#aaa;font-size:13px;\">Content not available for qgenda.</p>",
+  "interns": "<p style=\"color:#aaa;font-size:13px;\">Content not available for interns.</p>",
+  "links": "<p style=\"color:#aaa;font-size:13px;\">Content not available for links.</p>"
+  };
+  return _map[sec] || '<p style="color:#aaa;font-size:13px;">Select a rotation from the menu.</p>';
+}
+// ─── END ROTATION CONTENT ───
+
 function getRotationContent(sec) {
   var _map = {
   "overview": "<div><h2 style=\"font-size:18px;font-weight:800;margin-bottom:4px;\">Green Book</h2><p style=\"font-size:13px;color:#aaa;margin-bottom:16px;\">Select a rotation guide from the list.</p><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Service</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='aps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">💉 Acute Pain Service</button><button onclick=\"S.rotationSubsec='nora';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📡 NORA</button><button onclick=\"S.rotationSubsec='pps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📋 Pre-Procedure Services</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">General OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='uch';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏛️ UCH</button><button onclick=\"S.rotationSubsec='va';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🎖️ Rocky Mountain VA</button><button onclick=\"S.rotationSubsec='dh';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🚑 Denver Health</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Subspecialty OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🤱 OB Anesthesia</button><button onclick=\"S.rotationSubsec='txp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🫀 Transplant</button><button onclick=\"S.rotationSubsec='ct';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">❤️ Cardiothoracic</button><button onclick=\"S.rotationSubsec='neuro';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🧠 Neuroanesthesia</button><button onclick=\"S.rotationSubsec='chco';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👶 Children's (CHCO)</button><button onclick=\"S.rotationSubsec='cp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩺 Chronic Pain</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">ICU</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='sticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩻 STICU</button><button onclick=\"S.rotationSubsec='cticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏥 CTICU</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">CA-3</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='senior';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">⭐ Senior Month</button><button onclick=\"S.rotationSubsec='pacu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🛏️ PACU</button><button onclick=\"S.rotationSubsec='pocus';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔊 POCUS</button><button onclick=\"S.rotationSubsec='inverness';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏔️ Inverness</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Reference</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob-cookbook';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📖 OB Cookbook</button><button onclick=\"S.rotationSubsec='ct-att';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👨‍⚕️ CT Attending Prefs</button><button onclick=\"S.rotationSubsec='vpn';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔐 VPN / Remote Access</button><button onclick=\"S.rotationSubsec='contacts';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📞 Contacts</button><button onclick=\"S.rotationSubsec='qgenda';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📅 QGenda Glossary</button><button onclick=\"S.rotationSubsec='interns';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🌱 Intern Info</button><button onclick=\"S.rotationSubsec='links';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔗 Useful Links</button></div></div></div>",
@@ -3282,6 +3400,27 @@ function pgResources() {
     return `<div class="fade">
       <div style="margin-bottom:20px;"><div style="${sLbl}margin-bottom:6px;">Resources</div><h1 style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;">Resources</h1></div>
       ${tabs}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+        <div style="${sLbl}">OR Worksheets</div>
+        ${S.adminUnlocked ? `<label style="${pBtn()}padding:7px 16px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">📄 Upload Worksheet<input type="file" accept=".docx" multiple onchange="handleQuizFiles(Array.from(this.files))" style="display:none;"/></label>` : ''}
+      </div>
+      <div style="${card}padding:0;overflow:hidden;margin-bottom:24px;">
+        <div style="padding:14px 18px;background:#1B1B1B;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;">📝</span>
+            <div style="font-size:14px;font-weight:700;color:#fff;">OR Worksheets</div>
+            <span style="font-size:11px;color:rgba(255,255,255,.4);">${(S.quizzes||[]).length} worksheets</span>
+          </div>
+          <button onclick="go('quizzes')" style="font-size:12px;color:#CFB87C;background:none;border:none;cursor:pointer;font-weight:700;">Open full view →</button>
+        </div>
+        <div style="padding:16px 18px;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">
+          ${(S.quizzes||[]).length ? (S.quizzes||[]).slice(0,5).map(qz => `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#FAFAFA;border:1px solid #E8E5DF;border-radius:8px;">
+            <span style="font-size:18px;">📝</span>
+            <div style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${qz.name}</div>
+            <button onclick="openQuiz('${qz.id}')" style="${gBtn}padding:5px 12px;font-size:12px;">Review →</button>
+          </div>`).join('') + ((S.quizzes||[]).length > 5 ? `<button onclick="go('quizzes')" style="${gBtn}text-align:center;width:100%;padding:8px;">View all ${(S.quizzes||[]).length} worksheets →</button>` : '') : '<div style="font-size:13px;color:#aaa;padding:8px 0;">No worksheets uploaded yet.</div>'}
+        </div>
+      </div>
       <div style="${sLbl}margin-bottom:12px;">Quick Links</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-bottom:4px;" class="resources-links">${linksH}</div>
       ${adminSection}
