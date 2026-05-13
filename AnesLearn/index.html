@@ -3155,6 +3155,107 @@ async function deleteResourceItem(key, showFlag, idx) {
 
 
 
+
+
+function getRotationContent(sec) {
+  var _map = {
+  "overview": "<div><h2 style=\"font-size:18px;font-weight:800;margin-bottom:4px;\">Green Book</h2><p style=\"font-size:13px;color:#aaa;margin-bottom:16px;\">Select a rotation guide from the list.</p><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Service</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='aps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">💉 Acute Pain Service</button><button onclick=\"S.rotationSubsec='nora';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📡 NORA</button><button onclick=\"S.rotationSubsec='pps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📋 Pre-Procedure Services</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">General OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='uch';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏛️ UCH</button><button onclick=\"S.rotationSubsec='va';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🎖️ Rocky Mountain VA</button><button onclick=\"S.rotationSubsec='dh';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🚑 Denver Health</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Subspecialty OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🤱 OB Anesthesia</button><button onclick=\"S.rotationSubsec='txp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🫀 Transplant</button><button onclick=\"S.rotationSubsec='ct';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">❤️ Cardiothoracic</button><button onclick=\"S.rotationSubsec='neuro';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🧠 Neuroanesthesia</button><button onclick=\"S.rotationSubsec='chco';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👶 Children's (CHCO)</button><button onclick=\"S.rotationSubsec='cp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩺 Chronic Pain</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">ICU</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='sticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩻 STICU</button><button onclick=\"S.rotationSubsec='cticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏥 CTICU</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">CA-3</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='senior';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">⭐ Senior Month</button><button onclick=\"S.rotationSubsec='pacu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🛏️ PACU</button><button onclick=\"S.rotationSubsec='pocus';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔊 POCUS</button><button onclick=\"S.rotationSubsec='inverness';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏔️ Inverness</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Reference</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob-cookbook';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📖 OB Cookbook</button><button onclick=\"S.rotationSubsec='ct-att';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👨‍⚕️ CT Attending Prefs</button><button onclick=\"S.rotationSubsec='vpn';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔐 VPN / Remote Access</button><button onclick=\"S.rotationSubsec='contacts';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📞 Contacts</button><button onclick=\"S.rotationSubsec='qgenda';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📅 QGenda Glossary</button><button onclick=\"S.rotationSubsec='interns';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🌱 Intern Info</button><button onclick=\"S.rotationSubsec='links';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔗 Useful Links</button></div></div></div>",
+  "aps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for aps.</p>",
+  "chco": "<p style=\"color:#aaa;font-size:13px;\">Content not available for chco.</p>",
+  "cp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cp.</p>",
+  "ct": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct.</p>",
+  "cticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cticu.</p>",
+  "dh": "<p style=\"color:#aaa;font-size:13px;\">Content not available for dh.</p>",
+  "inverness": "<p style=\"color:#aaa;font-size:13px;\">Content not available for inverness.</p>",
+  "neuro": "<p style=\"color:#aaa;font-size:13px;\">Content not available for neuro.</p>",
+  "nora": "<p style=\"color:#aaa;font-size:13px;\">Content not available for nora.</p>",
+  "ob": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob.</p>",
+  "pacu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pacu.</p>",
+  "pocus": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pocus.</p>",
+  "pps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pps.</p>",
+  "senior": "<p style=\"color:#aaa;font-size:13px;\">Content not available for senior.</p>",
+  "sticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for sticu.</p>",
+  "txp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for txp.</p>",
+  "uch": "<p style=\"color:#aaa;font-size:13px;\">Content not available for uch.</p>",
+  "va": "<p style=\"color:#aaa;font-size:13px;\">Content not available for va.</p>",
+  "ob-cookbook": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob-cookbook.</p>",
+  "ct-att": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct-att.</p>",
+  "vpn": "<p style=\"color:#aaa;font-size:13px;\">Content not available for vpn.</p>",
+  "contacts": "<p style=\"color:#aaa;font-size:13px;\">Content not available for contacts.</p>",
+  "qgenda": "<p style=\"color:#aaa;font-size:13px;\">Content not available for qgenda.</p>",
+  "interns": "<p style=\"color:#aaa;font-size:13px;\">Content not available for interns.</p>",
+  "links": "<p style=\"color:#aaa;font-size:13px;\">Content not available for links.</p>"
+  };
+  return _map[sec] || '<p style="color:#aaa;font-size:13px;">Select a rotation from the menu.</p>';
+}
+// ─── END ROTATION CONTENT ───
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function getRotationContent(sec) {
+  var _map = {
+  "overview": "<div><h2 style=\"font-size:18px;font-weight:800;margin-bottom:4px;\">Green Book</h2><p style=\"font-size:13px;color:#aaa;margin-bottom:16px;\">Select a rotation guide from the list.</p><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Service</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='aps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">💉 Acute Pain Service</button><button onclick=\"S.rotationSubsec='nora';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📡 NORA</button><button onclick=\"S.rotationSubsec='pps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📋 Pre-Procedure Services</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">General OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='uch';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏛️ UCH</button><button onclick=\"S.rotationSubsec='va';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🎖️ Rocky Mountain VA</button><button onclick=\"S.rotationSubsec='dh';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🚑 Denver Health</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Subspecialty OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🤱 OB Anesthesia</button><button onclick=\"S.rotationSubsec='txp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🫀 Transplant</button><button onclick=\"S.rotationSubsec='ct';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">❤️ Cardiothoracic</button><button onclick=\"S.rotationSubsec='neuro';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🧠 Neuroanesthesia</button><button onclick=\"S.rotationSubsec='chco';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👶 Children's (CHCO)</button><button onclick=\"S.rotationSubsec='cp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩺 Chronic Pain</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">ICU</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='sticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩻 STICU</button><button onclick=\"S.rotationSubsec='cticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏥 CTICU</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">CA-3</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='senior';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">⭐ Senior Month</button><button onclick=\"S.rotationSubsec='pacu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🛏️ PACU</button><button onclick=\"S.rotationSubsec='pocus';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔊 POCUS</button><button onclick=\"S.rotationSubsec='inverness';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏔️ Inverness</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Reference</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob-cookbook';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📖 OB Cookbook</button><button onclick=\"S.rotationSubsec='ct-att';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👨‍⚕️ CT Attending Prefs</button><button onclick=\"S.rotationSubsec='vpn';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔐 VPN / Remote Access</button><button onclick=\"S.rotationSubsec='contacts';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📞 Contacts</button><button onclick=\"S.rotationSubsec='qgenda';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📅 QGenda Glossary</button><button onclick=\"S.rotationSubsec='interns';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🌱 Intern Info</button><button onclick=\"S.rotationSubsec='links';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔗 Useful Links</button></div></div></div>",
+  "aps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for aps.</p>",
+  "chco": "<p style=\"color:#aaa;font-size:13px;\">Content not available for chco.</p>",
+  "cp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cp.</p>",
+  "ct": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct.</p>",
+  "cticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for cticu.</p>",
+  "dh": "<p style=\"color:#aaa;font-size:13px;\">Content not available for dh.</p>",
+  "inverness": "<p style=\"color:#aaa;font-size:13px;\">Content not available for inverness.</p>",
+  "neuro": "<p style=\"color:#aaa;font-size:13px;\">Content not available for neuro.</p>",
+  "nora": "<p style=\"color:#aaa;font-size:13px;\">Content not available for nora.</p>",
+  "ob": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob.</p>",
+  "pacu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pacu.</p>",
+  "pocus": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pocus.</p>",
+  "pps": "<p style=\"color:#aaa;font-size:13px;\">Content not available for pps.</p>",
+  "senior": "<p style=\"color:#aaa;font-size:13px;\">Content not available for senior.</p>",
+  "sticu": "<p style=\"color:#aaa;font-size:13px;\">Content not available for sticu.</p>",
+  "txp": "<p style=\"color:#aaa;font-size:13px;\">Content not available for txp.</p>",
+  "uch": "<p style=\"color:#aaa;font-size:13px;\">Content not available for uch.</p>",
+  "va": "<p style=\"color:#aaa;font-size:13px;\">Content not available for va.</p>",
+  "ob-cookbook": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ob-cookbook.</p>",
+  "ct-att": "<p style=\"color:#aaa;font-size:13px;\">Content not available for ct-att.</p>",
+  "vpn": "<p style=\"color:#aaa;font-size:13px;\">Content not available for vpn.</p>",
+  "contacts": "<p style=\"color:#aaa;font-size:13px;\">Content not available for contacts.</p>",
+  "qgenda": "<p style=\"color:#aaa;font-size:13px;\">Content not available for qgenda.</p>",
+  "interns": "<p style=\"color:#aaa;font-size:13px;\">Content not available for interns.</p>",
+  "links": "<p style=\"color:#aaa;font-size:13px;\">Content not available for links.</p>"
+  };
+  return _map[sec] || '<p style="color:#aaa;font-size:13px;">Select a rotation from the menu.</p>';
+}
+// ─── END ROTATION CONTENT ───
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function getRotationContent(sec) {
   var _map = {
   "overview": "<div><h2 style=\"font-size:18px;font-weight:800;margin-bottom:4px;\">Green Book</h2><p style=\"font-size:13px;color:#aaa;margin-bottom:16px;\">Select a rotation guide from the list.</p><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Service</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='aps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">💉 Acute Pain Service</button><button onclick=\"S.rotationSubsec='nora';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📡 NORA</button><button onclick=\"S.rotationSubsec='pps';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📋 Pre-Procedure Services</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">General OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='uch';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏛️ UCH</button><button onclick=\"S.rotationSubsec='va';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🎖️ Rocky Mountain VA</button><button onclick=\"S.rotationSubsec='dh';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🚑 Denver Health</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Subspecialty OR</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🤱 OB Anesthesia</button><button onclick=\"S.rotationSubsec='txp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🫀 Transplant</button><button onclick=\"S.rotationSubsec='ct';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">❤️ Cardiothoracic</button><button onclick=\"S.rotationSubsec='neuro';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🧠 Neuroanesthesia</button><button onclick=\"S.rotationSubsec='chco';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👶 Children's (CHCO)</button><button onclick=\"S.rotationSubsec='cp';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩺 Chronic Pain</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">ICU</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='sticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🩻 STICU</button><button onclick=\"S.rotationSubsec='cticu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏥 CTICU</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">CA-3</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='senior';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">⭐ Senior Month</button><button onclick=\"S.rotationSubsec='pacu';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🛏️ PACU</button><button onclick=\"S.rotationSubsec='pocus';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔊 POCUS</button><button onclick=\"S.rotationSubsec='inverness';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🏔️ Inverness</button></div></div><div><div style=\"font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;\">Reference</div><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;\"><button onclick=\"S.rotationSubsec='ob-cookbook';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📖 OB Cookbook</button><button onclick=\"S.rotationSubsec='ct-att';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">👨‍⚕️ CT Attending Prefs</button><button onclick=\"S.rotationSubsec='vpn';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔐 VPN / Remote Access</button><button onclick=\"S.rotationSubsec='contacts';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📞 Contacts</button><button onclick=\"S.rotationSubsec='qgenda';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">📅 QGenda Glossary</button><button onclick=\"S.rotationSubsec='interns';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🌱 Intern Info</button><button onclick=\"S.rotationSubsec='links';draw()\" style=\"padding:10px 14px;border-radius:8px;border:1.5px solid #E8E5DF;background:#fff;text-align:left;cursor:pointer;font-size:13px;font-weight:600;width:100%;\">🔗 Useful Links</button></div></div></div>",
@@ -4194,16 +4295,20 @@ function pgPodcasts() {
     const embedHTML = (() => {
       if (!active) return '';
       if (isPodcast && ep.url.includes('accrac.com')) {
-        // Try to find a matching Spotify episode in the library by matching episode ID
-        const epIdMatch = ep.id && ep.id.replace('sa_','').replace('mod_','');
-        const spotifyMatch = (S.podcastLibrary||[]).find(p =>
-          p.type === 'spotify' && p.id && epIdMatch && p.id.includes(epIdMatch.replace('accrac_',''))
-        );
-        // Also try matching by label
-        const labelMatch = !spotifyMatch && (S.podcastLibrary||[]).find(p =>
-          p.type === 'spotify' && p.label && ep.label && p.label.toLowerCase().includes(ep.label.toLowerCase().replace(/accrac ep \d+:\s*/i,'').slice(0,20))
-        );
-        const spotifyEp = spotifyMatch || labelMatch;
+        // Match to Spotify by extracting episode number from label
+        // Our labels: "ACCRAC Ep 60: ..." or "ACCRAC Ep 60 ..."
+        // Spotify labels: "Episode 60: ..." or "60. ..."
+        const epNumMatch = ep.label && ep.label.match(/\bEp\.?\s*(\d+)\b/i);
+        const epNum = epNumMatch ? epNumMatch[1] : null;
+        const spotifyEp = epNum ? (S.podcastLibrary||[]).find(p => {
+          if (p.type !== 'spotify') return false;
+          const sNum = p.label && (
+            p.label.match(/\bEpisode\s+(\d+)\b/i) ||
+            p.label.match(/^(\d+)[.:]\s/) ||
+            p.label.match(/\bEp\.?\s*(\d+)\b/i)
+          );
+          return sNum && sNum[1] === epNum;
+        }) : null;
         if (spotifyEp) {
           const sUrl = buildEmbed(spotifyEp.url, 'spotify');
           return `<div style="margin-top:8px;border-radius:12px;overflow:hidden;border:1.5px solid #1DB954;">
@@ -4218,7 +4323,7 @@ function pgPodcasts() {
               allowfullscreen loading="lazy"></iframe>
           </div>`;
         }
-        // No Spotify match — show external link instead of broken iframe
+        // No Spotify match — show external link
         return `<div style="margin-top:8px;border-radius:12px;overflow:hidden;border:1.5px solid #E2CFA0;">
           <div style="background:linear-gradient(135deg,#CFB87C 0%,#A8924A 100%);padding:14px 18px;display:flex;align-items:center;gap:12px;">
             <div style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🎙️</div>
@@ -4226,11 +4331,12 @@ function pgPodcasts() {
             <div style="font-size:14px;font-weight:700;color:#1B1B1B;">${ep.label}</div></div>
           </div>
           <div style="padding:20px 18px;background:#FAF3DF;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">
-            <div style="font-size:13px;color:#A8924A;">This episode is not yet linked to a Spotify embed.</div>
+            <div style="font-size:13px;color:#A8924A;">Import the ACCRAC Spotify feed to enable embedded playback.</div>
             <a href="${ep.url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#1B1B1B;color:#CFB87C;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">🎙️ Open on ACCRAC ↗</a>
           </div>
         </div>`;
       }
+
       if (isSpotify) {
         return `<div style="margin-top:8px;border-radius:12px;overflow:hidden;border:1.5px solid #E2CFA0;">
           <div style="background:linear-gradient(135deg,#1DB954 0%,#158A3E 100%);padding:14px 18px;display:flex;align-items:center;gap:12px;">
