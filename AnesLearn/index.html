@@ -1,6 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+// ── DIAGNOSTIC ERROR DISPLAY (temporary) ──────────────────────────────────
+(function(){
+  function show(title, msg){
+    var d = document.getElementById('__err') || (function(){
+      var e = document.createElement('div'); e.id='__err';
+      e.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#7f1d1d;color:#fff;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:16px;white-space:pre-wrap;word-break:break-word;max-height:80vh;overflow:auto;border-bottom:3px solid #fca5a5;';
+      (document.body||document.documentElement).appendChild(e); return e;
+    })();
+    d.textContent += '\n=== '+title+' ===\n'+msg+'\n';
+  }
+  window.addEventListener('error', function(ev){
+    var m = ev.message || (ev.error && ev.error.message) || 'unknown error';
+    var where = ev.filename ? (' @ '+ev.filename.split('/').pop()+':'+ev.lineno+':'+ev.colno) : '';
+    var stack = (ev.error && ev.error.stack) ? '\n'+ev.error.stack : '';
+    show('JS ERROR', m + where + stack);
+  });
+  window.addEventListener('unhandledrejection', function(ev){
+    var r = ev.reason;
+    show('UNHANDLED PROMISE REJECTION', (r && r.message ? r.message : String(r)) + (r && r.stack ? '\n'+r.stack : ''));
+  });
+  // After 4s, if the app still rendered nothing, say so.
+  setTimeout(function(){
+    var app = document.getElementById('app');
+    if(app && app.innerHTML.trim()===''){ show('NOTICE', 'App container is still EMPTY after 4s — bootstrap likely never finished. Any error above tells why; if nothing above, a CDN script (supabase/mammoth) may have failed to load.'); }
+  }, 4000);
+})();
+</script>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>AnesLearn</title>
@@ -4684,7 +4712,17 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+// DIAGNOSTIC: surface bootstrap failures on-screen
+(async function(){
+  try { await bootstrap(); }
+  catch(e){
+    var d=document.getElementById('app')||document.body;
+    var box=document.createElement('div');
+    box.style.cssText='background:#7f1d1d;color:#fff;font:13px/1.5 monospace;padding:16px;white-space:pre-wrap;';
+    box.textContent='=== BOOTSTRAP THREW ===\n'+(e&&e.message?e.message:String(e))+'\n'+(e&&e.stack?e.stack:'');
+    d.appendChild(box);
+  }
+})();
 
 
 </script></body></html>
