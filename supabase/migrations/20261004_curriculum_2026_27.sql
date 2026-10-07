@@ -13,3 +13,6 @@ update public.courses set data = jsonb_set(data, '{archived}', 'true'::jsonb) wh
 
 -- Quiz rotation tags were being written to a column that did not exist (the update failed silently).
 alter table public.quizzes add column if not exists rotation text;
+
+-- Session times (Tue PM 15:00-17:00; Wed/Fri AM 06:30-07:00; Ed Days 13:00-15:00)
+update public.courses set data = jsonb_set(data,'{time}', to_jsonb(case id when 5 then '3:00–5:00 PM' when 6 then '6:30–7:00 AM' when 7 then '6:30–7:00 AM' when 8 then '1:00–3:00 PM' end)) where id in (5,6,7,8);
