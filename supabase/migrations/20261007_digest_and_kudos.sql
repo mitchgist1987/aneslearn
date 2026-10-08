@@ -1,4 +1,6 @@
 -- Two-week digest (per class year, with ACCRAC + readings) and anonymous kudos.
+-- STATUS: applied to production 2026-10-07 EXCEPT the two DROP statements below
+-- (trigger "Kudos" and the 6-arg send_kudos_email), which were blocked and are pending the owner's OK.
 -- Sender comes from settings.email_from (cuaneslearn.com is verified in Resend).
 
 create or replace function public._digest_esc(t text) returns text
