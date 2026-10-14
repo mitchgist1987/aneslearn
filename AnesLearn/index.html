@@ -135,11 +135,6 @@ header{position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25);f
 <body>
 <div id="app" style="display:flex;flex-direction:column;min-height:100vh;"></div>
 <script>
-// Seed value used ONLY to initialize the admin PIN on first run, if no PIN has
-// been set yet. The live PIN is stored as a SHA-256 hash in Supabase and can be
-// changed in Admin → Settings. Change this before first deploy, or set a new PIN
-// in the admin panel immediately after.
-const ADMIN_PIN_SEED='1234';
 
 // ─── SUPABASE ──────────────────────────────────────────────────────────────────
 const SB_URL = 'https://jinzbuksgttsxspmroto.supabase.co';
@@ -157,7 +152,7 @@ const S={
   events:    [],
   view:'loading',
   activeCourseId:null, activeModuleId:null,
-  activeResidentId: loadL('al6_identity', null),
+  activeResidentId: null, signedIn:false, role:null, userEmail:'', loginMsg:'', authUsers:[], authErr:null,
   adminUnlocked:false, showAdmin:false, adminTab:'residents', resourceSection:'rotation', rotationSubsec:'overview',
   modal:null, _confirmFn:null,
   courseFilter:'all', moduleTab:'content',
@@ -186,11 +181,35 @@ async function dbGet(table, col, val){
 }
 async function dbUpsert(table, row){
   const {error} = await sb.from(table).upsert(row);
-  if(error) console.error('dbUpsert',table,error);
+  if(error){ console.error('dbUpsert',table,error); S._dbErr = error.message; }
+}
+// Insert-only write (used for things residents create: kudos, evaluations, suggestions). Throws on failure.
+async function dbInsert(table, row){
+  const {error} = await sb.from(table).insert(row);
+  if(error){ console.error('dbInsert',table,error); throw error; }
 }
 async function dbDelete(table, col, val){
   const {error} = await sb.from(table).delete().eq(col,val);
-  if(error) console.error('dbDelete',table,error);
+  if(error){ console.error('dbDelete',table,error); S._dbErr = error.message; }
+}
+// Kudos are anonymous: the giver column is not readable by any client, so list columns explicitly.
+const KUDOS_COLS = 'id,recipient_id,recipient_name,badge_id,badge_emoji,badge_label,message,ts,created_at';
+async function dbGetKudos(){
+  const {data,error} = await sb.from('kudos').select(KUDOS_COLS);
+  if(error) console.error('dbGetKudos',error);
+  return data||[];
+}
+// Admin-only server calls (create logins, reset passwords...). The server re-checks that the caller is an admin.
+async function adminApi(action, payload={}){
+  const {data:{session}} = await sb.auth.getSession();
+  const res = await fetch(SB_URL + '/functions/v1/admin-users', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(session?.access_token||'')},
+    body: JSON.stringify({action, ...payload})
+  });
+  const out = await res.json().catch(()=>({error:'Unexpected response from server'}));
+  if(!res.ok || out.error) throw new Error(out.error || ('HTTP '+res.status));
+  return out;
 }
 async function dbSet(key, value){
   await sb.from('settings').upsert({key, value: JSON.stringify(value)});
@@ -210,7 +229,7 @@ async function persist(key, val){
     await Promise.all(val.map(c => dbUpsert('courses', {id:c.id, data:c})));
   } else if(key==='residents'){
     await Promise.all(val.map(r => dbUpsert('residents', {
-      id:r.id, name:r.name, year:r.year, chief:!!r.chief, enrolled:r.enrolled, email:r.email||'', phone:r.phone||''
+      id:r.id, name:r.name, year:r.year, chief:!!r.chief, enrolled:r.enrolled, email:r.email||''
     })));
   } else if(key==='events'){
     // Full replace: delete all then insert
@@ -223,6 +242,7 @@ async function persist(key, val){
   } else if(key==='kudos'){
     // kudos are appended individually — see submitKudos
   }
+  if(S._dbErr){ const m=S._dbErr; S._dbErr=null; alert('Could not save your changes: '+m+'\nIf this keeps happening, sign out and back in.'); }
 }
 
 // ─── HTML ESCAPING ────────────────────────────────────────────────────────────
@@ -283,6 +303,7 @@ const LT=[
   {v:'sharepoint',l:'SharePoint/OneDrive',i:'🗂'},
   {v:'other',l:'Other Link',i:'🔗'},
   {v:'upload',l:'Uploaded PDF',i:'📎'},
+  {v:'zoom',l:'Zoom Cloud Recording',i:'🎥'},
 ];
 const getLT=v=>LT.find(t=>t.v===v)||LT[6];
 const canEmbed=t=>['youtube','gslides','gdrive','spotify','pdf','upload','podcast'].includes(t);
@@ -291,6 +312,7 @@ const isPodcastType=t=>t==='spotify'||t==='podcast';
 function detectType(url){
   if(!url)return'other';
   if(/youtube\.com\/watch|youtu\.be\//.test(url))return'youtube';
+  if(/zoom\.us\/(rec|clips)/.test(url))return'zoom';
   if(/docs\.google\.com\/presentation/.test(url))return'gslides';
   if(/drive\.google\.com|docs\.google\.com/.test(url))return'gdrive';
   if(/open\.spotify\.com\/(episode|show|track)/.test(url))return'spotify';
@@ -341,27 +363,31 @@ function wkBadge(w,done){
 
 // ─── HEADER ───────────────────────────────────────────────────────────────────
 function hdr(){
-  const res=getRes();
-  const ini=res?inits(res.name):'DR';
+  const logo=`<div onclick="${S.signedIn?"go('dashboard')":''}" style="cursor:pointer;display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <div style="width:28px;height:28px;border-radius:7px;background:#CFB87C;display:flex;align-items:center;justify-content:center;font-size:14px;">🦬</div>
+      <div class="hdr-logo-text"><div style="font-size:13px;font-weight:800;color:#fff;font-family:'Playfair Display',serif;line-height:1.1;">AnesLearn</div><div style="font-size:8px;color:#CFB87C;letter-spacing:.1em;text-transform:uppercase;font-weight:600;">University of Colorado</div></div>
+    </div>`;
+  if(!S.signedIn) return `<header><div id="hdr-top">${logo}</div></header>`;
 
-  const navs=[['dashboard','Dashboard'],['courses','Courses'],['kudos','K-Hole Kudos'],['notes','Notes'],['podcasts','Podcasts'],['calendar','Calendar'],['resources','Resources'],['suggestions','Suggestion Box']];
+  const res=getRes();
+  const who=res?.name||(S.userEmail||'').split('@')[0].replace(/[._]/g,' ')||'You';
+  const ini=inits(who);
+  const navs=[['dashboard','Dashboard'],['courses','Courses'],['recordings','Recordings'],['kudos','K-Hole Kudos'],['notes','Notes'],['podcasts','Podcasts'],['calendar','Calendar'],['resources','Resources'],['suggestions','Suggestion Box']];
   const navH=navs.map(([id,lbl])=>{
     const a=S.view===id||(id==='courses'&&(S.view==='course'||S.view==='module'));
     return `<button onclick="go('${id}')" style="background:none;border:none;cursor:pointer;padding:0 12px;height:40px;color:${a?'#CFB87C':'rgba(255,255,255,.45)'};font-weight:${a?700:400};font-size:13px;border-bottom:2px solid ${a?'#CFB87C':'transparent'};white-space:nowrap;">${lbl}</button>`;
   }).join('');
   return `<header>
   <div id="hdr-top">
-    <div onclick="go('dashboard')" style="cursor:pointer;display:flex;align-items:center;gap:8px;flex-shrink:0;">
-      <div style="width:28px;height:28px;border-radius:7px;background:#CFB87C;display:flex;align-items:center;justify-content:center;font-size:14px;">🦬</div>
-      <div class="hdr-logo-text"><div style="font-size:13px;font-weight:800;color:#fff;font-family:'Playfair Display',serif;line-height:1.1;">AnesLearn</div><div style="font-size:8px;color:#CFB87C;letter-spacing:.1em;text-transform:uppercase;font-weight:600;">University of Colorado</div></div>
-    </div>
+    ${logo}
     <div class="hdr-actions">
       <button onclick="togglePushPrompt()" class="hdr-bell" title="${S.pushRegistered?'Notifications on':'Enable notifications'}" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:${S.pushRegistered?'#CFB87C':'rgba(255,255,255,.35)'};padding:5px 8px;font-size:13px;cursor:pointer;">${S.pushRegistered?'🔔':'🔕'}</button>
-      <button onclick="adminClick()" class="hdr-admin" style="background:rgba(255,255,255,.07);border:1px solid ${S.adminUnlocked?'rgba(207,184,124,.4)':'rgba(255,255,255,.12)'};border-radius:6px;color:${S.adminUnlocked?'#CFB87C':'rgba(255,255,255,.45)'};padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;">${S.adminUnlocked?'⚙️':'🔐'}<span class="hdr-admin-label"> Admin</span></button>
+      ${S.adminUnlocked?`<button onclick="adminClick()" class="hdr-admin" style="background:rgba(255,255,255,.07);border:1px solid rgba(207,184,124,.4);border-radius:6px;color:#CFB87C;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;">⚙️<span class="hdr-admin-label"> Admin</span></button>`:''}
       <div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 4px 3px 4px;" class="hdr-user">
-        <div style="width:24px;height:24px;border-radius:6px;background:#CFB87C;color:#1B1B1B;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;">${ini}</div>
-        <span class="hdr-switch-label" style="font-size:11px;color:rgba(255,255,255,.7);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px;">${getRes()?.name?.split(' ')[0]||'—'}</span>
-        <button onclick="identitySwitchPrompt()" title="Switch profile" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;color:rgba(255,255,255,.5);padding:2px 6px;font-size:10px;cursor:pointer;">⇄</button>
+        <div style="width:24px;height:24px;border-radius:6px;background:#CFB87C;color:#1B1B1B;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0;">${esc(ini)}</div>
+        <span class="hdr-switch-label" style="font-size:11px;color:rgba(255,255,255,.7);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px;">${esc(who.split(' ')[0])}</span>
+        <button onclick="S.modal={type:'account'};draw()" title="Change my password" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;color:rgba(255,255,255,.5);padding:2px 6px;font-size:10px;cursor:pointer;">🔑</button>
+        <button onclick="doLogout()" title="Sign out" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;color:rgba(255,255,255,.5);padding:2px 6px;font-size:10px;cursor:pointer;">⎋</button>
       </div>
     </div>
   </div>
@@ -416,18 +442,11 @@ function pgDashboard(){
   <div style="${card}padding:20px 24px;margin-bottom:20px;">
     <div style="${sLbl}margin-bottom:14px;">Quick Links <button onclick="go('resources')" style="${gBtn}font-size:11px;padding:3px 10px;margin-left:8px;">All resources →</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;" class="dash-links">
-      ${[
-        { icon:'📋', label:'ACGME Case Log', url:'https://apps.acgme.org/ads/', desc:'Log your clinical cases' },
-        { icon:'💉', label:'StanPumpR', url:'https://stanpumpr.io', desc:'TCI & pharmacokinetic modeling' },
-        { icon:'📚', label:'Strauss Library', url:'https://library.cuanschutz.edu', desc:'CU library access' },
-        { icon:'🗓️', label:'QGenda', url:'https://app.qgenda.com', desc:'Scheduling & rotations' },
-        { icon:'📗', label:'Green Book', url:'https://gb.cugammadex.com', desc:'Unofficial residency guide' },
-        { icon:'📖', label:'OpenAnesthesia', url:'https://www.openanesthesia.org', desc:'Board review content' },
-      ].map(l => `<a href="${l.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border:1.5px solid #E8E5DF;border-radius:10px;text-decoration:none;transition:border-color .15s;" onmouseover="this.style.borderColor='#CFB87C'" onmouseout="this.style.borderColor='#E8E5DF'">
-        <span style="font-size:20px;flex-shrink:0;">${l.icon}</span>
+      ${getQuickLinks().map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border:1.5px solid #E8E5DF;border-radius:10px;text-decoration:none;transition:border-color .15s;" onmouseover="this.style.borderColor='#CFB87C'" onmouseout="this.style.borderColor='#E8E5DF'">
+        <span style="font-size:20px;flex-shrink:0;">${esc(l.icon)}</span>
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:13px;color:#1a1a1a;">${l.label}</div>
-          <div style="font-size:11px;color:#aaa;">${l.desc}</div>
+          <div style="font-weight:700;font-size:13px;color:#1a1a1a;">${esc(l.label)}</div>
+          <div style="font-size:11px;color:#aaa;">${esc(l.desc)}</div>
         </div>
       </a>`).join('')}
     </div>
@@ -1009,22 +1028,23 @@ function pgCalendar(){
 
 function getAdminBody(tab) {
   let body='';
+  if(tab==='residents'||tab==='logins') ensureAuthUsers();
   if(tab==='residents'){
     const resH=S.residents.map(r=>{
       const enrolled=S.courses.filter(c=>r.enrolled.includes(c.id));
       return `<div style="${card}margin-bottom:12px;padding:18px 22px;"><div style="display:flex;align-items:flex-start;gap:14px;">
         <div style="width:44px;height:44px;border-radius:12px;background:#1B1B1B;color:#CFB87C;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex-shrink:0;font-family:'Playfair Display',serif;">${inits(r.name)}</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:15px;">${r.name}, ${r.degree} <span style="${tag('#FAF3DF','#A8924A')}margin-left:6px;">${r.year}</span>${r.chief?'<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:#1B1B1B;color:#CFB87C;margin-left:4px;">Chief</span>':''}</div>
-          <div style="font-size:12px;color:#aaa;margin-top:3px;margin-bottom:2px;">${r.email}</div>
-          <div style="font-size:12px;color:#aaa;margin-bottom:10px;">${r.phone ? '📱 '+r.phone : '<span style="opacity:.4;">no phone</span>'}</div>
+          <div style="font-weight:700;font-size:15px;">${esc(r.name)}${r.degree?', '+esc(r.degree):''} <span style="${tag('#FAF3DF','#A8924A')}margin-left:6px;">${r.year}</span>${r.chief?'<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:#1B1B1B;color:#CFB87C;margin-left:4px;">Chief</span>':''}</div>
+          <div style="font-size:12px;color:#aaa;margin-top:3px;margin-bottom:6px;">${esc(r.email)}</div>
+          <div style="margin-bottom:10px;">${loginBadge(r)}</div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;">
             ${enrolled.map(c=>`<span style="font-size:11px;padding:3px 8px;border-radius:4px;background:#F4F2EE;border:1px solid #E8E5DF;">${c.icon} ${c.title}</span>`).join('')||'<span style="font-size:12px;color:#aaa;">No courses enrolled</span>'}
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0;">
           <button onclick="editRes('${r.id}')" style="${gBtn}padding:6px 12px;font-size:12px;">✏️ Edit</button>
-          <button onclick="adminResetPin('${r.id}')" style="${gBtn}padding:6px 12px;font-size:12px;border-color:#F59E0B;color:#B45309;">🔑 PIN</button>
+          <button onclick="manageLogin('${r.id}')" style="${gBtn}padding:6px 12px;font-size:12px;border-color:#F59E0B;color:#B45309;">🔐 Login</button>
           <button onclick="delRes('${r.id}')" style="${dBtn}">Delete</button>
         </div>
       </div></div>`;
@@ -1034,7 +1054,7 @@ function getAdminBody(tab) {
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button onclick="uploadRosterCSV()" style="${gBtn}font-size:12px;padding:7px 14px;">📥 Import CSV</button>
         <button onclick="newAcademicYear()" style="${gBtn}font-size:12px;padding:7px 14px;border-color:#F59E0B;color:#B45309;">🎓 New Academic Year</button>
-        <button onclick="adminSwitchUser()" style="${gBtn}font-size:12px;padding:7px 14px;">🔄 Switch User</button>
+        <button onclick="bulkCreateLogins()" style="${pBtn()}font-size:12px;padding:7px 14px;">🔐 Create logins for everyone</button>
       </div>
     </div>
     <div style="${card}padding:14px 18px;margin-bottom:16px;background:#F0F7FF;border:1px solid #BFDBFE;">
@@ -1250,19 +1270,18 @@ function getAdminBody(tab) {
         <div style="font-size:28px;">💣</div>
         <div>
           <div style="font-size:15px;font-weight:800;color:#C0392B;">Reset Everything</div>
-          <div style="font-size:12px;color:#aaa;margin-top:2px;">Clears all PINs, all notes, and all kudos in one action</div>
+          <div style="font-size:12px;color:#aaa;margin-top:2px;">Clears all notes and all kudos in one action</div>
         </div>
       </div>
       <p style="font-size:12px;color:#888;margin-bottom:16px;line-height:1.6;">
-        This will delete every resident's PIN, all module notes across all residents, and all kudos entries. Residents, courses, events, quizzes, and the podcast library are unaffected.
+        This will delete all module notes across all residents and all kudos entries. Residents, logins, courses, events, quizzes, and the podcast library are unaffected.
       </p>
       <button onclick="resetAll()" style="width:100%;padding:11px;border-radius:9px;border:none;background:#C0392B;color:#fff;font-size:14px;font-weight:800;cursor:pointer;letter-spacing:.02em;">
-        💣 Reset All PINs, Notes & Kudos
+        💣 Reset All Notes & Kudos
       </button>
     </div>
 
     <div style="display:grid;gap:12px;">
-      ${resetRow('🔐','Reset All PINs','Removes every resident\'s saved PIN — they will be prompted to create a new one on next login','resetPins()')}
       ${resetRow('📝','Clear All Notes','Deletes all module notes saved by all residents','resetNotes()')}
       ${resetRow('🏆','Clear All Kudos','Deletes all kudos entries from the database','resetKudos()')}
       ${resetRow('🗒️','Clear All Evaluations','Deletes all anonymous lecture evaluations from the database','resetEvals()')}
@@ -1270,24 +1289,76 @@ function getAdminBody(tab) {
     </div>`;
   }
 
-  if(tab==='settings'){
-    body = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-      <div>
-        <div style="${sLbl}">Admin</div>
-        <h2 style="font-size:20px;font-weight:800;font-family:'Playfair Display',serif;margin-top:4px;">Settings</h2>
+  if(tab==='logins'){
+    const users = S.authUsers || [];
+    const nameOf = id => id ? (S.residents.find(r => r.id === id)?.name || '(resident removed)') : '— not on roster —';
+    const rows = users.map(u => `<tr style="border-bottom:1px solid #F0EDE8;">
+        <td style="padding:10px;font-size:13px;font-weight:600;">${esc(u.email)}</td>
+        <td style="padding:10px;font-size:12px;color:#666;">${esc(nameOf(u.resident_id))}</td>
+        <td style="padding:10px;">${u.role==='admin'?`<span style="${tag('#1B1B1B','#CFB87C')}">Admin</span>`:`<span style="${tag('#F4F2EE','#777')}">Resident</span>`}</td>
+        <td style="padding:10px;font-size:11px;color:#aaa;">${u.last_sign_in_at?new Date(u.last_sign_in_at).toLocaleDateString():'never'}</td>
+        <td style="padding:10px;white-space:nowrap;text-align:right;">
+          <button onclick="resetPwByUser('${u.user_id}')" style="${gBtn}padding:5px 10px;font-size:11px;">Reset password</button>
+          <button onclick="setLoginRole('${u.user_id}','${u.role==='admin'?'resident':'admin'}')" style="${gBtn}padding:5px 10px;font-size:11px;">${u.role==='admin'?'Remove admin':'Make admin'}</button>
+          <button onclick="deleteLoginUser('${u.user_id}')" style="${dBtn}padding:5px 10px;font-size:11px;">Delete</button>
+        </td></tr>`).join('');
+    const resOpts = S.residents.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(r => `<option value="${r.id}">${esc(r.name)} · ${esc(r.year)}</option>`).join('');
+    body = `<div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+      <div><div style="${sLbl}">Access</div><h2 style="font-size:20px;font-weight:800;font-family:'Playfair Display',serif;">Logins (${users.length})</h2></div>
+      <button onclick="bulkCreateLogins()" style="${pBtn()}font-size:12px;padding:8px 16px;">🔐 Create logins for everyone without one</button>
+    </div>
+    ${S.authErr?`<div style="${card}padding:14px 18px;margin-bottom:16px;border-left:3px solid #B83232;font-size:12px;color:#B83232;">Could not load logins: ${esc(S.authErr)}</div>`:''}
+    <div style="${card}padding:18px 20px;margin-bottom:20px;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:12px;">Add a login (faculty, program staff, or a resident)</div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr auto;gap:8px;align-items:end;">
+        <div><label style="${lbl}">Email</label><input id="nl_email" type="email" style="${inp}" placeholder="name@cuanschutz.edu"/></div>
+        <div><label style="${lbl}">Password <span style="font-weight:400;color:#aaa;">(blank = random)</span></label><input id="nl_pw" type="text" style="${inp}" placeholder="8+ characters"/></div>
+        <div><label style="${lbl}">Access</label><select id="nl_role" style="${inp}cursor:pointer;"><option value="resident">Resident</option><option value="admin">Admin</option></select></div>
+        <div><label style="${lbl}">Linked roster entry</label><select id="nl_res" style="${inp}cursor:pointer;"><option value="">— none —</option>${resOpts}</select></div>
+        <button onclick="createStandaloneLogin()" style="${pBtn()}padding:9px 16px;font-size:12px;">Create</button>
       </div>
     </div>
+    <div style="${card}overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:640px;">
+      <thead style="background:#F8F7F5;"><tr>${['Email','Roster entry','Access','Last sign-in',''].map(h=>`<th style="padding:9px 10px;font-size:11px;font-weight:700;text-align:left;color:#888;text-transform:uppercase;">${h}</th>`).join('')}</tr></thead>
+      <tbody>${rows || `<tr><td colspan="5" style="padding:28px;text-align:center;color:#aaa;font-size:13px;">${S._authLoaded?'No logins yet.':'Loading…'}</td></tr>`}</tbody>
+    </table></div>`;
+  }
+
+  if(tab==='settings'){
+    const editing = !!S.qlDraft;
+    const links = S.qlDraft || getQuickLinks();
+    const qlBody = editing
+      ? `${links.map((l,i)=>`<div style="display:grid;grid-template-columns:56px 1fr 1.5fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center;">
+          <input id="ql_icon_${i}" style="${inp}text-align:center;" value="${esc(l.icon)}"/>
+          <input id="ql_label_${i}" style="${inp}" value="${esc(l.label)}" placeholder="Label"/>
+          <input id="ql_url_${i}" style="${inp}" value="${esc(l.url)}" placeholder="https://…"/>
+          <input id="ql_desc_${i}" style="${inp}" value="${esc(l.desc)}" placeholder="Short description"/>
+          <button onclick="qlDel(${i})" style="${dBtn}">✕</button></div>`).join('')}
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+          <button onclick="qlAdd()" style="${gBtn}font-size:12px;">+ Add link</button>
+          <button onclick="qlSave()" style="${pBtn()}font-size:12px;padding:7px 16px;">Save quick links</button>
+          <button onclick="S.qlDraft=null;draw()" style="${gBtn}font-size:12px;">Cancel</button>
+          <button onclick="qlReset()" style="${gBtn}font-size:12px;margin-left:auto;">Restore defaults</button>
+        </div>`
+      : `${links.map(l=>`<div style="font-size:13px;padding:6px 0;border-bottom:1px solid #F0EDE8;">${esc(l.icon)} <strong>${esc(l.label)}</strong> <span style="color:#aaa;">· ${esc(l.desc)}</span></div>`).join('')}
+        <button onclick="qlEdit()" style="${gBtn}font-size:12px;margin-top:12px;">✏️ Edit quick links</button>`;
+    body = `
+    <div style="margin-bottom:20px;"><div style="${sLbl}">Admin</div><h2 style="font-size:20px;font-weight:800;font-family:'Playfair Display',serif;margin-top:4px;">Settings</h2></div>
+    <div style="${card}padding:22px 24px;margin-bottom:20px;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Dashboard quick links</div>
+      <div style="font-size:12px;color:#888;margin-bottom:14px;">The shortcut tiles residents see at the top of their dashboard.</div>
+      ${qlBody}
+    </div>
     <div style="${card}padding:24px;max-width:460px;">
-      <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Change admin PIN</div>
-      <div style="font-size:12px;color:#888;line-height:1.5;margin-bottom:16px;">Used to unlock the admin panel. You can use a numeric PIN or a longer passphrase (a longer passphrase is meaningfully more secure). This is stored as a one-way hash, not as plain text.</div>
-      <label style="${lbl}">New PIN / passphrase</label>
-      <input id="newPin1" type="password" autocomplete="new-password" style="${inp}margin-bottom:12px;" placeholder="At least 4 characters"/>
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Change my password</div>
+      <div style="font-size:12px;color:#888;line-height:1.5;margin-bottom:16px;">Signed in as ${esc(S.userEmail)}. Use at least 8 characters.</div>
+      <label style="${lbl}">New password</label>
+      <input id="set_pw1" type="password" autocomplete="new-password" style="${inp}margin-bottom:12px;"/>
       <label style="${lbl}">Confirm</label>
-      <input id="newPin2" type="password" autocomplete="new-password" style="${inp}margin-bottom:16px;" placeholder="Re-enter to confirm"/>
+      <input id="set_pw2" type="password" autocomplete="new-password" style="${inp}margin-bottom:16px;"/>
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-        <button onclick="changeAdminPin()" style="${pBtn()}">Update PIN</button>
-        <span id="pinChangeMsg" style="font-size:12px;font-weight:600;"></span>
+        <button onclick="changeMyPassword('set')" style="${pBtn()}">Update password</button>
+        <span id="set_msg" style="font-size:12px;font-weight:600;"></span>
       </div>
     </div>`;
   }
@@ -1321,11 +1392,191 @@ function adminPanel(){
       ${tabBtn('evals','📝 Evals',null)}
       ${tabBtn('suggestions','💬 Suggestions',null)}
       ${tabBtn('feeds','📡 Live Feeds',null)}
+      ${tabBtn('logins','🔐 Logins',null)}
+      ${tabBtn('settings','⚙️ Settings',null)}
       ${tabBtn('danger','⚠️ Reset',null)}
     </div>
     <div style="padding:24px 28px;flex:1;">${body}</div>
   </div>
 </div>`;
+}
+
+// ─── LOGIN MANAGEMENT (admin) ─────────────────────────────────────────────────
+const loginFor = resId => (S.authUsers||[]).find(u => u.resident_id === resId);
+
+async function refreshAuthUsers(){
+  try { const out = await adminApi('list'); S.authUsers = out.users || []; S.authErr = null; }
+  catch(e){ S.authUsers = []; S.authErr = e.message; }
+  S._authLoaded = true; draw();
+}
+function ensureAuthUsers(){
+  if(S.adminUnlocked && !S._authLoaded && !S._authLoading){
+    S._authLoading = true;
+    refreshAuthUsers().finally(()=>{ S._authLoading = false; });
+  }
+}
+function loginBadge(r){
+  if(S.authErr) return `<span style="font-size:11px;color:#B87C2D;">Login status unavailable (${esc(S.authErr)})</span>`;
+  if(!S._authLoaded) return '<span style="font-size:11px;color:#aaa;">Checking login…</span>';
+  const u = loginFor(r.id);
+  if(!u) return `<span style="${tag('#FBEAEA','#B83232')}">No login</span>`;
+  return `<span style="${tag('#EDF7F1','#2D7D4F')}">Login ✓</span>${u.role==='admin'?`<span style="${tag('#1B1B1B','#CFB87C')}margin-left:4px;">Admin</span>`:''}<span style="font-size:11px;color:#aaa;margin-left:8px;">${u.last_sign_in_at?'last sign-in '+new Date(u.last_sign_in_at).toLocaleDateString():'never signed in'}</span>`;
+}
+function manageLogin(resId){ S.modal = {type:'loginManage', data:{resId, shown:null}}; draw(); }
+function showCreds(resId, email, password){ S.modal = {type:'loginManage', data:{resId, shown:{email, password}}}; draw(); }
+
+async function createLoginFor(resId){
+  const email = document.getElementById('lm_email')?.value.trim();
+  const pw = document.getElementById('lm_pw')?.value || '';
+  try {
+    const out = await adminApi('create', {email, password: pw || undefined, resident_id: resId});
+    await refreshAuthUsers();
+    showCreds(resId, out.email, out.password);
+  } catch(e){ alert('Could not create login: ' + e.message); }
+}
+async function resetLoginFor(resId){
+  const u = loginFor(resId); if(!u) return;
+  try { const out = await adminApi('reset_password', {user_id: u.user_id}); showCreds(resId, u.email, out.password); }
+  catch(e){ alert('Could not reset password: ' + e.message); }
+}
+async function setLoginPw(resId){
+  const u = loginFor(resId); const pw = document.getElementById('lm_pw')?.value || '';
+  if(!u) return;
+  if(pw.length < 8){ alert('Password must be at least 8 characters.'); return; }
+  try { await adminApi('set_password', {user_id: u.user_id, password: pw}); showCreds(resId, u.email, pw); }
+  catch(e){ alert('Could not set password: ' + e.message); }
+}
+async function resetPwByUser(userId){
+  const u = (S.authUsers||[]).find(x => x.user_id === userId); if(!u) return;
+  try { const out = await adminApi('reset_password', {user_id: userId}); showCreds(u.resident_id || null, u.email, out.password); }
+  catch(e){ alert('Could not reset password: ' + e.message); }
+}
+async function setLoginRole(userId, role){
+  try { await adminApi('set_role', {user_id: userId, role}); await refreshAuthUsers(); }
+  catch(e){ alert('Could not change role: ' + e.message); }
+}
+function deleteLoginUser(userId){
+  const label = (S.authUsers||[]).find(u => u.user_id === userId)?.email || 'this user';
+  S._confirmFn = async () => {
+    try { await adminApi('delete', {user_id: userId}); await refreshAuthUsers(); }
+    catch(e){ alert('Could not delete login: ' + e.message); }
+  };
+  S.modal = {type:'confirm', data:{title:`Delete login for ${esc(label)}?`, msg:'They will no longer be able to sign in. Their notes and progress are kept and reattach if you create a new login for the same resident.'}};
+  draw();
+}
+async function createStandaloneLogin(){
+  const email = document.getElementById('nl_email')?.value.trim();
+  const pw = document.getElementById('nl_pw')?.value || '';
+  const role = document.getElementById('nl_role')?.value || 'resident';
+  const resId = document.getElementById('nl_res')?.value || '';
+  try {
+    const out = await adminApi('create', {email, password: pw || undefined, role, resident_id: resId || null});
+    await refreshAuthUsers();
+    S.modal = {type:'loginManage', data:{resId: resId || null, shown:{email: out.email, password: out.password}}}; draw();
+  } catch(e){ alert('Could not create login: ' + e.message); }
+}
+function bulkCreateLogins(){
+  const todo = S.residents.filter(r => r.email && !loginFor(r.id));
+  if(!todo.length){ alert('Every resident with an email on file already has a login.'); return; }
+  S._confirmFn = async () => {
+    try {
+      const out = await adminApi('bulk_create', {residents: todo.map(r => ({resident_id: r.id, email: r.email}))});
+      await refreshAuthUsers();
+      S.modal = {type:'bulkResult', data:{results: out.results}}; draw();
+    } catch(e){ alert('Bulk create failed: ' + e.message); }
+  };
+  S.modal = {type:'confirm', data:{title:`Create logins for ${todo.length} residents?`, btn:'Create logins', msg:'Each resident gets a login using the email on their roster entry and a random temporary password. You will see the passwords once, on the next screen, and can download them as a CSV to distribute.'}};
+  draw();
+}
+function downloadCreds(){
+  const rows = (S.modal?.data?.results || []).filter(r => r.status === 'created');
+  const nameOf = id => (S.residents.find(r => r.id === id)?.name || '');
+  const q = v => '"' + String(v ?? '').replace(/"/g,'""') + '"';
+  const csv = [['name','email','temporary_password'], ...rows.map(r => [nameOf(r.resident_id), r.email, r.password])].map(r => r.map(q).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'aneslearn_temporary_logins.csv'; a.click();
+}
+
+// ─── DASHBOARD QUICK LINKS (admin-editable) ───────────────────────────────────
+const DEFAULT_QUICK_LINKS = [
+  { icon:'📋', label:'ACGME Case Log', url:'https://apps.acgme.org/ads/', desc:'Log your clinical cases' },
+  { icon:'💉', label:'StanPumpR', url:'https://stanpumpr.io', desc:'TCI & pharmacokinetic modeling' },
+  { icon:'📚', label:'Strauss Library', url:'https://library.cuanschutz.edu', desc:'CU library access' },
+  { icon:'🗓️', label:'QGenda', url:'https://app.qgenda.com', desc:'Scheduling & rotations' },
+  { icon:'📗', label:'Green Book', url:'https://gb.cugammadex.com', desc:'Unofficial residency guide' },
+  { icon:'📖', label:'OpenAnesthesia', url:'https://www.openanesthesia.org', desc:'Board review content' },
+];
+const getQuickLinks = () => (S.quickLinks && S.quickLinks.length) ? S.quickLinks : DEFAULT_QUICK_LINKS;
+function qlRead(){
+  const n = (S.qlDraft || getQuickLinks()).length, out = [];
+  for(let i=0;i<n;i++){
+    const g = k => document.getElementById('ql_'+k+'_'+i)?.value.trim() || '';
+    out.push({icon:g('icon')||'🔗', label:g('label'), url:g('url'), desc:g('desc')});
+  }
+  return out;
+}
+function qlEdit(){ S.qlDraft = JSON.parse(JSON.stringify(getQuickLinks())); draw(); }
+function qlAdd(){ S.qlDraft = [...qlRead(), {icon:'🔗', label:'', url:'https://', desc:''}]; draw(); }
+function qlDel(i){ const d = qlRead(); d.splice(i,1); S.qlDraft = d; draw(); }
+async function qlSave(){
+  const links = qlRead().filter(l => l.label && /^https?:\/\//i.test(l.url));
+  try { await dbSet('quick_links', links); S.quickLinks = links.length ? links : null; S.qlDraft = null; draw(); }
+  catch(e){ alert('Could not save quick links.'); }
+}
+async function qlReset(){
+  try { await dbSet('quick_links', []); } catch(e){}
+  S.quickLinks = null; S.qlDraft = null; draw();
+}
+
+// ─── RECORDINGS LIBRARY ───────────────────────────────────────────────────────
+// Every lecture that has a recording attached (YouTube or Zoom), across all series, with search and filters.
+const REC_TYPES = ['youtube','zoom'];
+const modTime = m => { const [mo,da,yr] = String(m.date||'').split('/').map(Number); return yr ? new Date(yr,(mo||1)-1,da||1).getTime() : 0; };
+function pgRecordings(){
+  const res = getRes();
+  const myLv = res ? String(res.year||'').replace('-','') : '';
+  const q = (S.recSearch||'').trim().toLowerCase(), cf = S.recCourse||'all', tf = S.recTag||'';
+  const all = [];
+  (res ? S.courses.filter(c=>canSee(c,res)) : S.courses).forEach(c => c.modules.forEach(m => {
+    if(m.level && res && !S.adminUnlocked && m.level !== myLv) return;
+    const recs = (m.content||[]).filter(i => REC_TYPES.includes(i.type));
+    if(recs.length) all.push({c, m, recs});
+  }));
+  const tags = [...new Set(all.flatMap(x => x.m.tags||[]))].sort();
+  const items = all.filter(x =>
+    (cf==='all' || String(x.c.id)===cf) &&
+    (!tf || (x.m.tags||[]).includes(tf)) &&
+    (!q || (x.m.title+' '+(x.m.faculty||'')+' '+(x.m.subspecialty||'')+' '+(x.m.tags||[]).join(' ')).toLowerCase().includes(q))
+  ).sort((a,b) => modTime(b.m) - modTime(a.m));
+
+  const courseOpts = [...new Map(all.map(x => [x.c.id, x.c])).values()].map(c => `<option value="${c.id}"${cf===String(c.id)?' selected':''}>${esc(c.title)}</option>`).join('');
+  const tagBtns = tags.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">${['',...tags].map(t=>`<button data-t="${esc(t)}" onclick="S.recTag=this.dataset.t;draw()" style="${tf===t?pBtn('#A8924A','#fff'):gBtn}font-size:11px;padding:4px 11px;">${t?esc(t):'All topics'}</button>`).join('')}</div>` : '';
+  const cards = items.map(({c,m,recs}) => {
+    const cc = CC[c.id] || CC[1];
+    return `<div onclick="Object.assign(S,{activeCourseId:${c.id}});openMod(${m.id})" style="${card}padding:15px 20px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:8px;" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.07)'" onmouseout="this.style.boxShadow=''">
+      <div style="width:44px;height:44px;border-radius:10px;background:${cc.bg};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${c.icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:14px;line-height:1.35;margin-bottom:4px;">${esc(m.title)}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <span style="${tag(cc.accent+'30',cc.bg==='#1B1B1B'?'#7A5C00':cc.bg)}">${esc(cc.tag)} · ${esc(c.title)}</span>
+          ${m.faculty?`<span style="font-size:11px;color:#aaa;">👩‍⚕️ ${esc(m.faculty)}</span>`:''}
+          ${m.date?`<span style="font-size:11px;color:#aaa;">📅 ${esc(m.date)}</span>`:''}
+          ${(m.tags||[]).map(t=>`<span style="${tag('#F4F2EE','#777')}">${esc(t)}</span>`).join('')}
+        </div>
+      </div>
+      <span style="font-size:11px;padding:4px 9px;border-radius:6px;background:#FAF3DF;color:#A8924A;font-weight:700;border:1px solid #E2CFA0;flex-shrink:0;">▶ ${recs.length} recording${recs.length>1?'s':''}</span>
+    </div>`;
+  }).join('');
+  return `<div class="fade">
+    <div style="margin-bottom:20px;"><div style="${sLbl}margin-bottom:6px;">Rewatch any lecture</div><h1 style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;">Recordings</h1></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <input id="rec_q" value="${esc(S.recSearch||'')}" oninput="S.recSearch=this.value;draw()" placeholder="Search title, speaker, topic…" style="${inp}flex:1;min-width:200px;"/>
+      <select onchange="S.recCourse=this.value;draw()" style="${inp}width:auto;cursor:pointer;"><option value="all">All series</option>${courseOpts}</select>
+    </div>
+    ${tagBtns}
+    ${items.length ? cards : `<div style="${card}padding:40px;text-align:center;color:#aaa;font-size:13px;">${all.length?'No recordings match those filters.':'No recordings have been added yet. Recordings appear here once a YouTube or Zoom link is attached to a lecture.'}</div>`}
+  </div>`;
 }
 
 // ─── MODALS ───────────────────────────────────────────────────────────────────
@@ -1334,24 +1585,12 @@ function modal(){
   const {type,data}=S.modal;
   let inner='';
 
-  if(type==='pin'){
-    inner=`<div style="text-align:center;padding:8px 0;">
-      <div style="font-size:40px;margin-bottom:14px;">🔐</div>
-      <h2 style="font-size:20px;font-weight:800;font-family:'Playfair Display',serif;margin-bottom:6px;">Admin Access</h2>
-      <p style="font-size:13px;color:#aaa;margin-bottom:22px;">Enter your PIN to manage content</p>
-      <div id="pinWrap" style="max-width:200px;margin:0 auto;"><input id="pinInp" type="password" maxlength="8" onkeydown="if(event.key==='Enter')doPin()" autofocus style="${inp}text-align:center;font-size:22px;letter-spacing:.35em;padding:12px;" placeholder="• • • •"/></div>
-      <div id="pinErr" style="font-size:12px;color:#B83232;min-height:18px;margin:6px 0 10px;"></div>
-      <div style="display:flex;gap:10px;justify-content:center;"><button onclick="closeModal()" style="${gBtn}">Cancel</button><button onclick="doPin()" style="${pBtn()}">Unlock</button></div>
-      <p style="font-size:11px;color:#ccc;margin-top:16px;">Default PIN: 1234</p>
-    </div>`;
-  }
-
   if(type==='confirm'){
     inner=`<div style="text-align:center;padding:4px 0;">
       <div style="font-size:38px;margin-bottom:12px;">⚠️</div>
       <h2 style="font-size:18px;font-weight:700;margin-bottom:8px;">${data.title}</h2>
       <p style="font-size:13px;color:#666;margin-bottom:22px;">${data.msg}</p>
-      <div style="display:flex;gap:10px;justify-content:center;"><button onclick="closeModal()" style="${gBtn}">Cancel</button><button onclick="doConfirm()" style="${pBtn('#B83232','#fff')}">Delete</button></div>
+      <div style="display:flex;gap:10px;justify-content:center;"><button onclick="closeModal()" style="${gBtn}">Cancel</button><button onclick="doConfirm()" style="${pBtn('#B83232','#fff')}">${data.btn||'Delete'}</button></div>
     </div>`;
   }
 
@@ -1370,9 +1609,8 @@ function modal(){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:4px;">
       <div><label style="${lbl}">Full Name</label><input id="rn" style="${inp}" value="${r.name||''}" placeholder="First Last"/></div>
       <div><label style="${lbl}">Degree</label><select id="rd" style="${inp}cursor:pointer;">${['MD','DO','MBBS','MD/PhD'].map(d=>`<option${r.degree===d?' selected':''}>${d}</option>`).join('')}</select></div>
-      <div><label style="${lbl}">Year</label><select id="ry" style="${inp}cursor:pointer;">${['CA-1','CA-2','CA-3','Fellow','Other'].map(y=>`<option${r.year===y?' selected':''}>${y}</option>`).join('')}</select></div>
+      <div><label style="${lbl}">Year</label><select id="ry" style="${inp}cursor:pointer;">${['Intern','CA-1','CA-2','CA-3','Fellow','A','Other'].map(y=>`<option${r.year===y?' selected':''}>${y}</option>`).join('')}</select></div>
       <div><label style="${lbl}">Email</label><input id="re" type="email" style="${inp}" value="${r.email||''}" placeholder="name@cuanschutz.edu"/></div>
-      <div><label style="${lbl}">Phone <span style="font-weight:400;color:#aaa;">(for SMS kudos)</span></label><input id="rph" type="tel" style="${inp}" value="${r.phone||''}" placeholder="+13035551234"/></div>
     </div>
     <div style="padding-top:16px;border-top:1px solid #F0EDE8;margin:16px 0;"><div style="${sLbl}margin-bottom:12px;">Enrolled Courses</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">${checks}</div></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;"><button onclick="closeModal()" style="${gBtn}">Cancel</button><button onclick="saveRes('${r.id||''}')" style="${pBtn()}">${r.id?'Save':'Add Resident'}</button></div>`;
@@ -1450,19 +1688,79 @@ function modal(){
     inner = renderKudosDetailModal(data);
   }
 
+  if(type==='account'){
+    inner = `<div style="display:flex;justify-content:space-between;margin-bottom:18px;"><h2 style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif;">My Account</h2><button onclick="closeModal()" style="background:none;border:none;font-size:26px;cursor:pointer;color:#ccc;line-height:1;">×</button></div>
+    <p style="font-size:13px;color:#777;margin-bottom:16px;">Signed in as <strong>${esc(S.userEmail)}</strong></p>
+    <label style="${lbl}">New password</label>
+    <input id="acc_pw1" type="password" autocomplete="new-password" style="${inp}margin-bottom:12px;" placeholder="At least 8 characters"/>
+    <label style="${lbl}">Confirm</label>
+    <input id="acc_pw2" type="password" autocomplete="new-password" style="${inp}margin-bottom:16px;"/>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <button onclick="changeMyPassword('acc')" style="${pBtn()}">Update password</button>
+      <button onclick="closeModal()" style="${gBtn}">Close</button>
+      <span id="acc_msg" style="font-size:12px;font-weight:600;"></span>
+    </div>`;
+  }
+
+  if(type==='loginManage'){
+    const r = S.residents.find(x => x.id === data.resId);
+    const u = data.resId ? loginFor(data.resId) : null;
+    const head = `<div style="display:flex;justify-content:space-between;margin-bottom:18px;"><h2 style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif;">Login${r?` · ${esc(r.name)}`:''}</h2><button onclick="closeModal()" style="background:none;border:none;font-size:26px;cursor:pointer;color:#ccc;line-height:1;">×</button></div>`;
+    if(data.shown){
+      inner = `${head}<div style="background:#FAF3DF;border:1.5px solid #A8924A;border-radius:10px;padding:16px 18px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;color:#A8924A;margin-bottom:8px;">SHARE THESE WITH THE USER</div>
+        <div style="font-size:13px;margin-bottom:4px;">Email: <strong>${esc(data.shown.email)}</strong></div>
+        <div style="font-size:13px;">Password: <code style="background:#fff;padding:3px 8px;border-radius:5px;font-size:14px;user-select:all;">${esc(data.shown.password)}</code></div>
+      </div>
+      <p style="font-size:12px;color:#B87C2D;margin-bottom:16px;">⚠ This password is shown only now and cannot be looked up later. They can change it themselves with the 🔑 button after signing in.</p>
+      <div style="text-align:right;"><button onclick="closeModal()" style="${pBtn()}">Done</button></div>`;
+    } else if(!u){
+      inner = `${head}<p style="font-size:13px;color:#777;margin-bottom:14px;">This resident has no login yet.</p>
+      <label style="${lbl}">Email (their username)</label>
+      <input id="lm_email" type="email" style="${inp}margin-bottom:12px;" value="${esc(r?.email||'')}"/>
+      <label style="${lbl}">Password <span style="font-weight:400;color:#aaa;">(leave blank for a random one)</span></label>
+      <input id="lm_pw" type="text" style="${inp}margin-bottom:18px;" placeholder="8+ characters"/>
+      <div style="display:flex;gap:10px;justify-content:flex-end;"><button onclick="closeModal()" style="${gBtn}">Cancel</button><button onclick="createLoginFor('${data.resId}')" style="${pBtn()}">Create login</button></div>`;
+    } else {
+      inner = `${head}<p style="font-size:13px;color:#555;margin-bottom:4px;">Username: <strong>${esc(u.email)}</strong></p>
+      <p style="font-size:12px;color:#aaa;margin-bottom:18px;">${u.last_sign_in_at?'Last sign-in '+new Date(u.last_sign_in_at).toLocaleString():'Has never signed in'}</p>
+      <button onclick="resetLoginFor('${data.resId}')" style="${pBtn()}width:100%;margin-bottom:14px;">🔑 Reset to a new temporary password</button>
+      <label style="${lbl}">Or set a specific password</label>
+      <div style="display:flex;gap:8px;margin-bottom:18px;"><input id="lm_pw" type="text" style="${inp}" placeholder="8+ characters"/><button onclick="setLoginPw('${data.resId}')" style="${gBtn}white-space:nowrap;">Set</button></div>
+      <div style="display:flex;gap:10px;justify-content:space-between;border-top:1px solid #F0EDE8;padding-top:14px;">
+        <button onclick="deleteLoginUser('${u.user_id}')" style="${dBtn}">Delete login</button>
+        <button onclick="closeModal()" style="${gBtn}">Close</button>
+      </div>`;
+    }
+  }
+
+  if(type==='bulkResult'){
+    const rs = data.results || [];
+    const made = rs.filter(r => r.status === 'created'), other = rs.filter(r => r.status !== 'created');
+    const nameOf = id => S.residents.find(r => r.id === id)?.name || '';
+    inner = `<div style="display:flex;justify-content:space-between;margin-bottom:14px;"><h2 style="font-size:18px;font-weight:800;font-family:'Playfair Display',serif;">${made.length} login${made.length===1?'':'s'} created</h2><button onclick="closeModal()" style="background:none;border:none;font-size:26px;cursor:pointer;color:#ccc;">×</button></div>
+    <p style="font-size:12px;color:#B87C2D;margin-bottom:12px;">⚠ Temporary passwords are shown only now. Download the CSV before closing this window.</p>
+    <div style="border:1px solid #E8E5DF;border-radius:8px;overflow:auto;max-height:320px;margin-bottom:16px;"><table style="width:100%;border-collapse:collapse;">
+      <tbody>${made.map(r=>`<tr style="border-bottom:1px solid #F0EDE8;"><td style="padding:7px 10px;font-size:12px;font-weight:600;">${esc(nameOf(r.resident_id))}</td><td style="padding:7px 10px;font-size:12px;color:#666;">${esc(r.email)}</td><td style="padding:7px 10px;font-size:12px;"><code>${esc(r.password)}</code></td></tr>`).join('')}
+      ${other.map(r=>`<tr style="border-bottom:1px solid #F0EDE8;background:#FFF8F0;"><td style="padding:7px 10px;font-size:12px;">${esc(nameOf(r.resident_id))}</td><td style="padding:7px 10px;font-size:12px;color:#666;">${esc(r.email)}</td><td style="padding:7px 10px;font-size:11px;color:#B83232;">${esc(r.status)}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;"><button onclick="downloadCreds()" style="${pBtn()}" ${made.length?'':'disabled'}>⬇ Download CSV</button><button onclick="closeModal()" style="${gBtn}">Close</button></div>`;
+  }
+
   return `<div class="modal-wrap" onclick="closeModal()"><div class="modal-inner" onclick="event.stopPropagation()">${inner}</div></div>`;
 }
 
 // ─── DRAW ─────────────────────────────────────────────────────────────────────
 function draw(){
   let main='';
-  // Auth guard — force identity screen if not logged in
-  const protectedViews = ['dashboard','courses','course','module','calendar','quizzes','quiz','kudos','notes','podcasts','resources','suggestions','admin'];
-  if (!S.activeResidentId && protectedViews.includes(S.view)) {
-    S.view = 'identity';
+  // Auth guard — signed-out visitors only ever see the sign-in screen
+  const protectedViews = ['dashboard','courses','course','module','recordings','calendar','quizzes','quiz','kudos','notes','podcasts','resources','suggestions','admin'];
+  if (!S.signedIn && protectedViews.includes(S.view)) {
+    S.view = 'login';
   }
   if(S.view==='loading') main=pgLoading();
-  else if(S.view==='identity') main=pgIdentity();
+  else if(S.view==='login') main=pgLogin();
+  else if(S.view==='recordings') main=pgRecordings();
   else if(S.view==='dashboard') main=pgDashboard();
   else if(S.view==='courses') main=pgCourses();
   else if(S.view==='course')  main=pgCourse();
@@ -1507,7 +1805,6 @@ function draw(){
     }
   }
 
-  if(S.modal?.type==='pin'){const i=document.getElementById('pinInp');if(i)i.focus();}
 }
 
 // ─── ACTIONS ──────────────────────────────────────────────────────────────────
@@ -1608,23 +1905,6 @@ function exportNotes() {
   a.click();
   URL.revokeObjectURL(url);
 }
-function identitySwitchPrompt() {
-  // Go directly to identity picker — new person must enter their own PIN
-  saveL('al6_identity', null);
-  S.activeResidentId = null;
-  _identityStep = 'pick';
-  _identityResId = null;
-  _identityNewPin = null;
-  S.view = 'identity';
-  draw();
-}
-
-function adminSwitchUser() {
-  // Admin shortcut — same as switch but from admin panel
-  S.showAdmin = false;
-  identitySwitchPrompt();
-}
-
 function adminDeleteKudo(id) {
   S._confirmFn = async () => {
     await dbDelete('kudos', 'id', id);
@@ -1636,20 +1916,6 @@ function adminDeleteKudo(id) {
 }
 
 
-
-async function resetPins() {
-  S._confirmFn = async () => {
-    // Delete all settings rows whose key starts with 'pin_'
-    const { data } = await sb.from('settings').select('key').like('key','pin_%');
-    if(data?.length) {
-      await Promise.all(data.map(r => sb.from('settings').delete().eq('key', r.key)));
-    }
-    alert(`✓ All ${data?.length||0} PINs cleared. Residents will set a new PIN on next login.`);
-    draw();
-  };
-  S.modal = { type:'confirm', data:{ title:'Reset all PINs?', msg:`This will delete every resident's saved PIN. They will be prompted to create a new one the next time they sign in. This cannot be undone.` }};
-  draw();
-}
 
 async function resetNotes() {
   S._confirmFn = async () => {
@@ -1700,82 +1966,27 @@ async function resetEvals() {
 
 async function resetAll() {
   S._confirmFn = async () => {
-    const { data: settingsRows } = await sb.from('settings').select('key').or('key.like.pin_%,key.like.note_%');
+    const { data: settingsRows } = await sb.from('settings').select('key').like('key','note\\_%');
     if(settingsRows?.length) {
       await Promise.all(settingsRows.map(r => sb.from('settings').delete().eq('key', r.key)));
     }
     await sb.from('kudos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     S.kudos = [];
     S._notes = {};
-    const pinCount = settingsRows?.filter(r=>r.key.startsWith('pin_')).length||0;
-    const noteCount = settingsRows?.filter(r=>r.key.startsWith('note_')).length||0;
-    alert(`✓ Reset complete.\n• ${pinCount} PINs cleared\n• ${noteCount} note entries cleared\n• All kudos deleted`);
+    alert(`✓ Reset complete.\n• ${settingsRows?.length||0} note entries cleared\n• All kudos deleted`);
     draw();
   };
-  S.modal = { type:'confirm', data:{ title:'Reset everything?', msg:`This will permanently delete ALL PINs, ALL notes, and ALL kudos for every resident. Courses, quizzes, and the podcast library are unaffected. This cannot be undone.` }};
+  S.modal = { type:'confirm', data:{ title:'Reset everything?', msg:`This will permanently delete ALL notes and ALL kudos for every resident. Logins, courses, quizzes, and the podcast library are unaffected. This cannot be undone.` }};
   draw();
 }
 
-function adminResetPin(resId) {
-  const r = S.residents.find(x => x.id === resId);
-  S._confirmFn = async () => {
-    await dbDelete('settings', 'key', 'pin_' + resId);
-    alert(`PIN reset for ${r?.name}. They will be prompted to set a new PIN on next login.`);
-  };
-  S.modal = {
-    type: 'confirm',
-    data: { title: `Reset PIN for ${r?.name}?`, msg: 'They will need to create a new PIN next time they sign in.' }
-  };
-  draw();
-}
-
-function adminClick(){if(S.adminUnlocked){S.showAdmin=true;draw();}else{S.modal={type:'pin'};draw();}}
+function adminClick(){if(S.adminUnlocked){S.showAdmin=true;draw();}}
 function closeAdmin(){S.showAdmin=false;draw();}
 function setAT(t){S.adminTab=t;draw();}
 function closeModal(){S.modal=null;S._confirmFn=null;draw();}
 function doConfirm(){if(S._confirmFn)S._confirmFn();S.modal=null;S._confirmFn=null;draw();}
 function calNav(dir){let m=S.calMonth+dir,y=S.calYear;if(m<0){m=11;y--;}if(m>11){m=0;y++;}S.calMonth=m;S.calYear=y;S.calSel=null;draw();}
 function calSel(d){S.calSel=S.calSel===d?null:d;draw();}
-
-// SHA-256 hex of a string (used for admin PIN verification).
-async function sha256Hex(str){
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-
-async function doPin(){
-  const v=document.getElementById('pinInp')?.value||'';
-  // PIN/passphrase is stored as a SHA-256 hash in Supabase (settings → admin_pin_hash),
-  // seeded on first run (see bootstrap). It is NOT in the page source.
-  let ok=false;
-  try {
-    const stored = await dbGetSetting('admin_pin_hash', '');
-    ok = stored && (await sha256Hex(v)) === stored;
-  } catch(e){ console.error('doPin', e); }
-  if(ok){S.adminUnlocked=true;S.modal=null;S.showAdmin=true;draw();}
-  else{
-    const w=document.getElementById('pinWrap'),e=document.getElementById('pinErr');
-    if(e)e.textContent='Incorrect PIN — try again';
-    if(w){w.style.animation='shake .4s ease';setTimeout(()=>{if(w)w.style.animation='';},450);}
-    const i=document.getElementById('pinInp');if(i){i.value='';i.focus();}
-  }
-}
-
-// Admin: change the unlock PIN / passphrase. Stores only the hash.
-async function changeAdminPin(){
-  const a=document.getElementById('newPin1')?.value||'';
-  const b=document.getElementById('newPin2')?.value||'';
-  const msg=document.getElementById('pinChangeMsg');
-  const show=(t,c)=>{ if(msg){msg.textContent=t;msg.style.color=c;} };
-  if(a.length<4){ show('Use at least 4 characters.', '#B83232'); return; }
-  if(a!==b){ show('The two entries do not match.', '#B83232'); return; }
-  try {
-    await dbSet('admin_pin_hash', await sha256Hex(a));
-    show('✓ PIN updated.', '#2D7D4F');
-    const i1=document.getElementById('newPin1'), i2=document.getElementById('newPin2');
-    if(i1)i1.value=''; if(i2)i2.value='';
-  } catch(e){ console.error('changeAdminPin', e); show('Could not save — try again.', '#B83232'); }
-}
 
 async function toggleDone(){
   const c=getCourse(),m=getMod();if(!c||!m)return;
@@ -1786,14 +1997,14 @@ async function toggleDone(){
   S.courses = updatedCourses;
   draw();
   // Persist to Supabase — progress table tracks per-resident
-  const progressId = (res?.id||'anon') + '_' + m.id;
+  if(!res) return;   // accounts not linked to a roster entry (e.g. faculty admins) have no progress to track
+  const progressId = res.id + '_' + m.id;
   if(newCompleted){
-    await dbUpsert('progress', {id:progressId, resident_id:res?.id||'anon', module_id:String(m.id), completed:true});
+    await dbUpsert('progress', {id:progressId, resident_id:res.id, module_id:String(m.id), completed:true});
   } else {
     await dbDelete('progress','id',progressId);
   }
-  // Also save course content changes to Supabase
-  await dbUpsert('courses', {id:c.id, data:{...c,modules:updatedCourses.find(co=>co.id===c.id)?.modules||c.modules}});
+  if(S._dbErr){ S._dbErr=null; alert('Could not save your progress. Please try again.'); }
 }
 
 function togglePlayer(id){S.activePlayer=S.activePlayer===id?null:id;draw();}
@@ -1925,38 +2136,11 @@ async function submitEval(moduleId, courseId) {
       flagged: false,
       ts: Date.now()
     };
-    await dbUpsert('evaluations', evalRow);
-    S.evaluations = [...(S.evaluations||[]), evalRow];
+    await dbInsert('evaluations', evalRow);
+    if(S.adminUnlocked) S.evaluations = [...(S.evaluations||[]), evalRow];
     localStorage.setItem('al6_eval_' + moduleId, '1');
 
-    // Email notification to admin
-    try {
-      const adminRes = S.residents.find(r => r.year === 'A');
-      const adminEmail = adminRes?.email || 'mitchell.gist@cuanschutz.edu';
-      const emailSettings = await dbGetSetting('email_from', 'AnesLearn <noreply@cuaneslearn.com>');
-      const resendKey = await dbGetSetting('resend_api_key', '');
-      if(resendKey) {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json','Authorization':'Bearer '+resendKey},
-          body: JSON.stringify({
-            from: emailSettings,
-            to: [adminEmail],
-            subject: `New Eval: ${moduleTitle}`,
-            html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
-              <h2 style="color:#1B1B1B;">New Lecture Evaluation</h2>
-              <p><strong>Lecture:</strong> ${moduleTitle}</p>
-              <p><strong>Submitted:</strong> ${new Date().toLocaleDateString()}</p>
-              <div style="background:#F4F2EE;border-radius:8px;padding:16px;margin:16px 0;">
-                <p style="margin:0;font-size:15px;line-height:1.6;">${text.replace(/\n/g,'<br>')}</p>
-              </div>
-              <p style="font-size:12px;color:#aaa;">This evaluation was submitted anonymously via AnesLearn.</p>
-              <a href="https://cuaneslearn.com" style="font-size:12px;color:#CFB87C;">View in Admin Panel →</a>
-            </div>`
-          })
-        });
-      }
-    } catch(emailErr) { console.warn('Eval email failed:', emailErr); }
+    // The admin notification email is sent by the database when the row is inserted.
 
     draw();
   } catch(e) {
@@ -2074,7 +2258,7 @@ function newAcademicYear() {
     type: 'confirm',
     data: {
       title: '🎓 Start New Academic Year?',
-      msg: 'This will clear the entire resident roster and all progress data. Course content, quizzes, and kudos will be preserved. You\'ll then import a fresh roster CSV.',
+      msg: 'This will clear the entire resident roster and all progress data. Course content, quizzes, and kudos will be preserved. Logins are not deleted — remove old ones from the Logins tab. You\'ll then import a fresh roster CSV.',
     }
   };
   S._confirmFn = async () => {
@@ -2108,10 +2292,9 @@ function saveRes(id){
   const degree=document.getElementById('rd')?.value;
   const year=document.getElementById('ry')?.value;
   const email=document.getElementById('re')?.value?.trim();
-  const phone=document.getElementById('rph')?.value?.trim();
   if(!name)return;
   const enrolled=S.modal?.data?.enrolled||[];
-  const residents=id?S.residents.map(r=>r.id===id?{...r,name,degree,year,email,phone,enrolled}:r):[...S.residents,{id:'r'+Date.now(),name,degree,year,email,phone,enrolled}];
+  const residents=id?S.residents.map(r=>r.id===id?{...r,name,degree,year,email,enrolled}:r):[...S.residents,{id:'r'+Date.now(),name,degree,year,email,enrolled}];
   S.modal=null;persist('residents',residents);
 }
 function delRes(id){
@@ -2870,64 +3053,12 @@ async function submitKudos() {
     ts:             Date.now(),
   };
 
-  await dbUpsert('kudos', kudo);
-
-  // Send email + SMS to recipient
-  try {
-    const recipientEmail = recipient?.email;
-    const recipientPhone = recipient?.phone;
-    const resendKey = await dbGetSetting('resend_api_key', '');
-    const emailFrom = await dbGetSetting('email_from', 'AnesLearn <noreply@cuaneslearn.com>');
-    const twilioSid  = await dbGetSetting('twilio_sid', '');
-    const twilioToken = await dbGetSetting('twilio_token', '');
-    const twilioFrom = await dbGetSetting('twilio_from', '');
-
-    // Email
-    if (resendKey && recipientEmail) {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json','Authorization':'Bearer '+resendKey},
-        body: JSON.stringify({
-          from: emailFrom,
-          to: [recipientEmail],
-          subject: `${badge?.emoji || '⭐'} ${giverName} sent you a K-Hole Kudo!`,
-          html: `<div style="font-family:sans-serif;max-width:500px;margin:0 auto;background:#1B1B1B;border-radius:14px;overflow:hidden;">
-            <div style="background:#CFB87C;padding:20px 24px;text-align:center;">
-              <div style="font-size:48px;">${badge?.emoji || '⭐'}</div>
-              <div style="font-size:18px;font-weight:800;color:#1B1B1B;margin-top:8px;">K-Hole Kudos</div>
-            </div>
-            <div style="padding:24px;color:#fff;">
-              <p style="font-size:16px;margin:0 0 12px;">Hey ${esc(firstName)},</p>
-              <p style="font-size:15px;margin:0 0 16px;color:#CFB87C;font-weight:700;">${badge?.emoji} ${badge?.label}</p>
-              <p style="font-size:15px;margin:0 0 20px;line-height:1.6;">${esc(message)}</p>
-              <p style="font-size:13px;color:rgba(255,255,255,.5);margin:0;">— Sent anonymously via AnesLearn K-Hole Kudos</p>
-            </div>
-          </div>`
-        })
-      });
-    }
-
-    // SMS via Twilio
-    if (twilioSid && twilioToken && twilioFrom && recipientPhone) {
-      const smsBody = `${badge?.emoji || '⭐'} K-Hole Kudos!\n\n${badge?.label}\n\n"${message}"\n\n— Sent anonymously via AnesLearn`;
-      const formData = new URLSearchParams({
-        From: twilioFrom,
-        To: recipientPhone,
-        Body: smsBody
-      });
-      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + btoa(twilioSid + ':' + twilioToken),
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: formData
-      });
-    }
-  } catch(emailErr) { console.warn('Kudos notification failed:', emailErr); }
+  try { await dbInsert('kudos', kudo); }
+  catch(e){ alert('Could not send your kudos. Please try again.'); return; }
+  // The recipient's email + push notification are sent by the database (anonymously) when the row is inserted.
 
   // Reload kudos from DB
-  const rows = await dbGet('kudos');
+  const rows = await dbGetKudos();
   S.kudos = rows.sort((a,b)=>b.ts-a.ts).map(k=>({
     ...k, recipientId:k.recipient_id, recipientName:k.recipient_name,
     badgeId:k.badge_id, badgeEmoji:k.badge_emoji, badgeLabel:k.badge_label
@@ -2992,39 +3123,12 @@ async function submitSuggestion() {
   if(!text) { alert('Please enter a suggestion before submitting.'); return; }
   try {
     const row = { feedback: text, category: cat, flagged: false, ts: Date.now() };
-    await dbUpsert('suggestions', row);
-    S.suggestions = [...(S.suggestions||[]), row];
+    await dbInsert('suggestions', row);
+    if(S.adminUnlocked) S.suggestions = [...(S.suggestions||[]), row];
     localStorage.setItem('al6_suggested_' + (S.activeResidentId||''), '1');
     S._suggCat = null;
 
-    // Email admin
-    try {
-      const adminRes = S.residents.find(r => r.year === 'A');
-      const adminEmail = adminRes?.email || 'mitchell.gist@cuanschutz.edu';
-      const emailFrom = await dbGetSetting('email_from', 'AnesLearn <noreply@cuaneslearn.com>');
-      const resendKey = await dbGetSetting('resend_api_key', '');
-      if(resendKey) {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json','Authorization':'Bearer '+resendKey},
-          body: JSON.stringify({
-            from: emailFrom,
-            to: [adminEmail],
-            subject: `New Suggestion [${cat}]`,
-            html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
-              <h2 style="color:#1B1B1B;">New Suggestion Box Submission</h2>
-              <p><strong>Category:</strong> ${cat}</p>
-              <p><strong>Submitted:</strong> ${new Date().toLocaleDateString()}</p>
-              <div style="background:#F4F2EE;border-radius:8px;padding:16px;margin:16px 0;">
-                <p style="margin:0;font-size:15px;line-height:1.6;">${text.replace(/\n/g,'<br>')}</p>
-              </div>
-              <p style="font-size:12px;color:#aaa;">Submitted anonymously via AnesLearn Suggestion Box.</p>
-              <a href="https://cuaneslearn.com" style="font-size:12px;color:#CFB87C;">View in Admin Panel →</a>
-            </div>`
-          })
-        });
-      }
-    } catch(e) { console.warn('Suggestion email failed:', e); }
+    // The admin notification email is sent by the database when the row is inserted.
 
     draw();
   } catch(e) {
@@ -3063,7 +3167,8 @@ function pgAdminFull() {
         ${tabBtn('evals','📝 Evals',(S.evaluations||[]).length)}
         ${tabBtn('suggestions','💬 Suggestions',(S.suggestions||[]).length)}
         ${tabBtn('feeds','📡 Live Feeds',null)}
-        ${tabBtn('settings','🔐 Settings',null)}
+        ${tabBtn('logins','🔐 Logins',null)}
+        ${tabBtn('settings','⚙️ Settings',null)}
         ${tabBtn('danger','⚠️ Reset',null)}
       </div>
       <div style="padding:28px 32px;">
@@ -4221,300 +4326,169 @@ function pgLoading() {
   </div>`;
 }
 
-// Identity flow state
-let _identityStep = 'pick';   // 'pick' | 'pin' | 'setpin' | 'confirmpin'
-let _identityResId = null;
-let _identityNewPin = null;
-
-function pgIdentity() {
-  if (_identityStep === 'pick') {
-    const opts = S.residents.map(r =>
-      `<option value="${r.id}">${r.name}${r.chief?' · Chief':''} · ${r.year}</option>`
-    ).join('');
-    return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:20px;">
-      <div style="${card}padding:40px;max-width:420px;width:100%;text-align:center;">
-        <div style="font-size:48px;margin-bottom:16px;">👋</div>
-        <h1 style="font-size:22px;font-weight:800;font-family:'Playfair Display',serif;margin-bottom:8px;">Welcome to AnesLearn</h1>
-        <p style="font-size:13px;color:#aaa;margin-bottom:28px;">Select your name to sign in.</p>
-        <div style="margin-bottom:20px;text-align:left;">
-          <label style="${lbl}">Who are you?</label>
-          <select id="identity_select" style="${inp}cursor:pointer;">
-            <option value="">Select your name…</option>
-            ${opts}
-          </select>
-        </div>
-        <button onclick="identityNext()" style="${pBtn()}width:100%;padding:12px;font-size:15px;">Continue →</button>
+// ─── SIGN IN ──────────────────────────────────────────────────────────────────
+// Real per-user logins (Supabase Auth). Accounts are created by an administrator
+// from Admin → Residents / Logins; there is no self-signup.
+function pgLogin() {
+  return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:20px;">
+    <div style="${card}padding:40px;max-width:400px;width:100%;">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="font-size:44px;margin-bottom:10px;">🏥</div>
+        <h1 style="font-size:22px;font-weight:800;font-family:'Playfair Display',serif;margin-bottom:6px;">Sign in to AnesLearn</h1>
+        <p style="font-size:13px;color:#aaa;">CU Anesthesiology Residency</p>
       </div>
-    </div>`;
-  }
-
-  const r = S.residents.find(x => x.id === _identityResId);
-  const firstName = r?.name?.split(' ')[0] || 'there';
-
-  if (_identityStep === 'pin') {
-    return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:20px;">
-      <div style="${card}padding:40px;max-width:380px;width:100%;text-align:center;">
-        <div style="width:52px;height:52px;border-radius:14px;background:#1B1B1B;color:#CFB87C;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;margin:0 auto 16px;font-family:'Playfair Display',serif;">${inits(r?.name||'?')}</div>
-        <h2 style="font-size:20px;font-weight:800;font-family:'Playfair Display',serif;margin-bottom:6px;">Hi, ${firstName}</h2>
-        <p style="font-size:13px;color:#aaa;margin-bottom:24px;">Enter your 4-digit PIN to sign in.</p>
-        <input id="pin_input" type="password" inputmode="numeric" maxlength="4" autofocus
-          onkeydown="if(event.key==='Enter')identitySubmitPin()"
-          oninput="if(this.value.length===4)identitySubmitPin()"
-          style="${inp}text-align:center;font-size:28px;letter-spacing:.4em;padding:14px;max-width:180px;margin:0 auto 6px;display:block;"/>
-        <div id="pin_err" style="font-size:12px;color:#B83232;min-height:18px;margin-bottom:16px;"></div>
-        <div style="display:flex;gap:10px;">
-          <button onclick="identityBack()" style="${gBtn}flex:1;">← Back</button>
-          <button onclick="identitySubmitPin()" style="${pBtn()}flex:1;">Sign In</button>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  if (_identityStep === 'setpin') {
-    return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:20px;">
-      <div style="${card}padding:40px;max-width:380px;width:100%;text-align:center;">
-        <div style="font-size:40px;margin-bottom:16px;">🔐</div>
-        <h2 style="font-size:20px;font-weight:800;font-family:'Playfair Display',serif;margin-bottom:6px;">Create your PIN</h2>
-        <p style="font-size:13px;color:#aaa;margin-bottom:24px;">Choose a 4-digit PIN. You'll use this every time you sign in on a new device.</p>
-        <input id="pin_input" type="password" inputmode="numeric" maxlength="4" autofocus
-          onkeydown="if(event.key==='Enter')identityConfirmPin()"
-          oninput="if(this.value.length===4)identityConfirmPin()"
-          style="${inp}text-align:center;font-size:28px;letter-spacing:.4em;padding:14px;max-width:180px;margin:0 auto 6px;display:block;"/>
-        <div id="pin_err" style="font-size:12px;color:#B83232;min-height:18px;margin-bottom:16px;"></div>
-        <div style="display:flex;gap:10px;">
-          <button onclick="identityBack()" style="${gBtn}flex:1;">← Back</button>
-          <button onclick="identityConfirmPin()" style="${pBtn()}flex:1;">Next →</button>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  if (_identityStep === 'confirmpin') {
-    return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:20px;">
-      <div style="${card}padding:40px;max-width:380px;width:100%;text-align:center;">
-        <div style="font-size:40px;margin-bottom:16px;">🔐</div>
-        <h2 style="font-size:20px;font-weight:800;font-family:'Playfair Display',serif;margin-bottom:6px;">Confirm your PIN</h2>
-        <p style="font-size:13px;color:#aaa;margin-bottom:24px;">Enter your PIN one more time to confirm.</p>
-        <input id="pin_input" type="password" inputmode="numeric" maxlength="4" autofocus
-          onkeydown="if(event.key==='Enter')identityFinishSetPin()"
-          oninput="if(this.value.length===4)identityFinishSetPin()"
-          style="${inp}text-align:center;font-size:28px;letter-spacing:.4em;padding:14px;max-width:180px;margin:0 auto 6px;display:block;"/>
-        <div id="pin_err" style="font-size:12px;color:#B83232;min-height:18px;margin-bottom:16px;"></div>
-        <div style="display:flex;gap:10px;">
-          <button onclick="_identityStep='setpin';_identityNewPin=null;draw();" style="${gBtn}flex:1;">← Back</button>
-          <button onclick="identityFinishSetPin()" style="${pBtn()}flex:1;">Set PIN & Sign In</button>
-        </div>
-      </div>
-    </div>`;
-  }
-  return '';
+      <form onsubmit="doLogin();return false;">
+        <label style="${lbl}" for="login_email">Email</label>
+        <input id="login_email" type="email" autocomplete="username" autocapitalize="none" required style="${inp}margin-bottom:14px;" placeholder="name@cuanschutz.edu"/>
+        <label style="${lbl}" for="login_pw">Password</label>
+        <input id="login_pw" type="password" autocomplete="current-password" required style="${inp}margin-bottom:8px;"/>
+        <div id="login_err" style="font-size:12px;color:#B83232;min-height:18px;margin-bottom:12px;">${esc(S.loginMsg||'')}</div>
+        <button type="submit" style="${pBtn()}width:100%;padding:12px;font-size:15px;">Sign In</button>
+      </form>
+      <p style="font-size:12px;color:#aaa;text-align:center;margin-top:18px;line-height:1.6;">No login yet, or forgot your password?<br>Ask your program administrator — they can create or reset it for you.</p>
+    </div>
+  </div>`;
 }
 
-function identityBack() {
-  _identityStep = 'pick';
-  _identityResId = null;
-  _identityNewPin = null;
-  draw();
+function loginErr(msg){ const e=document.getElementById('login_err'); if(e) e.textContent=msg; }
+
+async function doLogin() {
+  const email = document.getElementById('login_email')?.value.trim();
+  const pw = document.getElementById('login_pw')?.value || '';
+  if (!email || !pw) { loginErr('Enter your email and password.'); return; }
+  loginErr('Signing in…');
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  if (error) { loginErr('Incorrect email or password.'); return; }
+  S.loginMsg = '';
+  await loadApp();
 }
 
-async function identityNext() {
-  const id = document.getElementById('identity_select')?.value;
-  if (!id) { alert('Please select your name.'); return; }
-  _identityResId = id;
-  // Check if this resident already has a PIN in Supabase
-  try {
-    const rows = await dbGet('settings', 'key', 'pin_' + id);
-    if (rows && rows.length > 0) {
-      _identityStep = 'pin';
-    } else {
-      _identityStep = 'setpin';
-    }
-  } catch(e) {
-    _identityStep = 'setpin';
-  }
-  draw();
-  setTimeout(() => document.getElementById('pin_input')?.focus(), 100);
+async function doLogout() {
+  try { await sb.auth.signOut(); } catch(e) {}
+  location.reload();   // drops every bit of the previous user's data from memory
 }
 
-// Show a PIN-screen error and reset the box — tolerant of the screen having already changed.
-function pinFail(msg) {
-  const e = document.getElementById('pin_err'), i = document.getElementById('pin_input');
-  if (e) e.textContent = msg;
-  if (i) { i.value = ''; i.focus(); }
+async function changeMyPassword(prefix) {
+  const a = document.getElementById(prefix+'_pw1')?.value || '';
+  const b = document.getElementById(prefix+'_pw2')?.value || '';
+  const msg = document.getElementById(prefix+'_msg');
+  const show = (t,c) => { if(msg){ msg.textContent=t; msg.style.color=c; } };
+  if (a.length < 8) { show('Use at least 8 characters.', '#B83232'); return; }
+  if (a !== b) { show('The two entries do not match.', '#B83232'); return; }
+  const { error } = await sb.auth.updateUser({ password: a });
+  if (error) { show(error.message || 'Could not update password.', '#B83232'); return; }
+  show('✓ Password updated.', '#2D7D4F');
+  ['_pw1','_pw2'].forEach(s => { const i=document.getElementById(prefix+s); if(i) i.value=''; });
 }
-
-async function identitySubmitPin() {
-  const entered = document.getElementById('pin_input')?.value;
-  if (!entered || entered.length < 4) return;
-  try {
-    const rows = await dbGet('settings', 'key', 'pin_' + _identityResId);
-    const stored = rows?.[0]?.value?.replace(/"/g, '');
-    if (entered === stored) {
-      await identityComplete(_identityResId);
-    } else {
-      pinFail('Incorrect PIN. Try again.');
-    }
-  } catch(e) {
-    pinFail('Error checking PIN. Try again.');
-  }
-}
-
-function identityConfirmPin() {
-  const pin = document.getElementById('pin_input')?.value;
-  if (!pin || pin.length < 4) return;
-  _identityNewPin = pin;
-  _identityStep = 'confirmpin';
-  draw();
-  setTimeout(() => document.getElementById('pin_input')?.focus(), 100);
-}
-
-async function identityFinishSetPin() {
-  const confirm = document.getElementById('pin_input')?.value;
-  if (!confirm || confirm.length < 4) return;
-  if (confirm !== _identityNewPin) {
-    pinFail('PINs don\'t match. Try again.');
-    return;
-  }
-  // Save PIN to Supabase
-  await dbUpsert('settings', { key: 'pin_' + _identityResId, value: JSON.stringify(_identityNewPin) });
-  await identityComplete(_identityResId);
-}
-
-async function identityComplete(id) {
-  saveL('al6_identity', id);
-  S.activeResidentId = id;
-  _identityStep = 'pick';
-  _identityResId = null;
-  _identityNewPin = null;
-  // Load progress
-  if (S.dbReady) {
-    try {
-      const progressRows = await dbGet('progress', 'resident_id', id);
-      const completedModIds = new Set(progressRows.filter(p=>p.completed).map(p=>String(p.module_id)));
-      S.courses = S.courses.map(c => ({...c, modules: c.modules.map(m => ({
-        ...m, completed: completedModIds.has(String(m.id))
-      }))}));
-    } catch(e) {}
-    // Load notes in background
-    loadAllNotes(id);
-  }
-  S.view = 'dashboard';
-  draw();
-}
-
-
 
 // ─── APP BOOTSTRAP ────────────────────────────────────────────────────────────
-async function bootstrap() {
-  draw(); // show loading screen
-
+// Loads everything the signed-in user is allowed to see. What comes back is decided by
+// the database's row-level-security rules, not by this page.
+async function loadApp() {
+  S.view = 'loading'; draw();
   try {
-    // Load all data in parallel
-    const [resRows, courseRows, eventRows, kudosRows, quizRows, evalRows, suggRows, icsUrlSetting, podcastLibSetting, adminResourcesSetting, rotResourcesSetting, profResourcesSetting, greenBookSetting] = await Promise.all([
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { S.signedIn = false; S.view = 'login'; draw(); return; }
+
+    const { data: prof, error: profErr } = await sb.from('profiles').select('resident_id,role').eq('user_id', session.user.id).maybeSingle();
+    if (profErr || !prof) {
+      await sb.auth.signOut();
+      S.signedIn = false;
+      S.loginMsg = 'This login is not linked to a resident profile yet. Please ask your program administrator.';
+      S.view = 'login'; draw(); return;
+    }
+    S.userEmail = session.user.email || '';
+    S.role = prof.role;
+    S.adminUnlocked = prof.role === 'admin';
+    S.activeResidentId = prof.resident_id || null;
+    S.signedIn = true;
+    const isAdmin = S.adminUnlocked;
+    const none = Promise.resolve([]);
+
+    const [resRows, courseRows, eventRows, kudosRows, quizRows, evalRows, suggRows, icsUrlSetting, podcastLibSetting, adminResourcesSetting, rotResourcesSetting, profResourcesSetting, greenBookSetting, quickLinksSetting] = await Promise.all([
       dbGet('residents'),
       dbGet('courses'),
       dbGet('events'),
-      dbGet('kudos'),
+      dbGetKudos(),
       dbGet('quizzes'),
-      dbGet('evaluations'),
-      dbGet('suggestions'),
+      isAdmin ? dbGet('evaluations') : none,      // evaluations & suggestions are admin-only
+      isAdmin ? dbGet('suggestions') : none,
       dbGetSetting('icsUrl', ''),
       dbGetSetting('podcast_library', '[]'),
       dbGetSetting('admin_resources', '[]'),
       dbGetSetting('rotation_resources', '[]'),
       dbGetSetting('professional_resources', '[]'),
       dbGetSetting('green_book', null),
+      dbGetSetting('quick_links', null),
     ]);
 
-    // Hydrate residents
     S.residents = resRows.map(r => ({
-      id:r.id, name:r.name, year:r.year, chief:r.chief, enrolled:r.enrolled||[], email:r.email||'', phone:r.phone||''
+      id:r.id, name:r.name, year:r.year, chief:r.chief, enrolled:r.enrolled||[], email:r.email||''
     }));
 
-    // Hydrate courses — merge with progress for this resident
+    // Courses merged with THIS resident's progress
     const resId = S.activeResidentId;
     const progressRows = resId ? await dbGet('progress','resident_id',resId) : [];
     const completedModIds = new Set(progressRows.filter(p=>p.completed).map(p=>String(p.module_id)));
-
     S.courses = courseRows.map(row => {
       const c = row.data;
-      return {...c, modules: c.modules.map(m => ({
-        ...m, completed: completedModIds.has(String(m.id))
-      }))};
+      return {...c, modules: c.modules.map(m => ({ ...m, completed: completedModIds.has(String(m.id)) }))};
     }).sort((a,b) => a.id - b.id);
 
-    // Hydrate events
     S.events = eventRows;
-
-    // Hydrate kudos
     S.kudos = kudosRows.sort((a,b) => b.ts - a.ts).map(k => ({
       ...k, recipientId:k.recipient_id, recipientName:k.recipient_name,
       badgeId:k.badge_id, badgeEmoji:k.badge_emoji, badgeLabel:k.badge_label
     }));
-
-    // Hydrate quizzes
     S.quizzes = quizRows.map(q => ({...q, docxBytes:q.docx_bytes}));
-
-    // Hydrate evaluations
     S.evaluations = evalRows || [];
+    S.suggestions = suggRows || [];
     try { S.adminResources = JSON.parse(adminResourcesSetting || '[]'); } catch { S.adminResources = []; }
     try { S.rotationResources = JSON.parse(rotResourcesSetting || '[]'); } catch { S.rotationResources = []; }
     try { S.professionalResources = JSON.parse(profResourcesSetting || '[]'); } catch { S.professionalResources = []; }
-    S.suggestions = suggRows || [];
+    S.quickLinks = Array.isArray(quickLinksSetting) && quickLinksSetting.length ? quickLinksSetting : null;
 
-    // Seed Green Book on first run from greenbook-default.json.
+    // Green Book: use the saved copy; on first run fall back to the bundled default (only an admin saves it back).
     if (greenBookSetting && typeof greenBookSetting === 'object' && Object.keys(greenBookSetting).length) {
       S.greenBook = greenBookSetting;
     } else {
       S.greenBook = {...(await loadDefaultGB())};
-      try { await dbSet('green_book', S.greenBook); } catch(e) { console.warn('green_book seed failed:', e); }
+      if (isAdmin) { try { await dbSet('green_book', S.greenBook); } catch(e) { console.warn('green_book seed failed:', e); } }
     }
 
-    // Seed the admin PIN hash on first run (from ADMIN_PIN_SEED) if none is set.
-    try {
-      const existingPin = await dbGetSetting('admin_pin_hash', '');
-      if (!existingPin) await dbSet('admin_pin_hash', await sha256Hex(ADMIN_PIN_SEED));
-    } catch(e){ console.warn('admin_pin seed failed:', e); }
-
-    // Hydrate ICS url
     S.icsUrl = icsUrlSetting || '';
     try { S.podcastLibrary = Array.isArray(podcastLibSetting) ? podcastLibSetting : JSON.parse(podcastLibSetting || '[]'); } catch { S.podcastLibrary = []; }
 
     S.dbReady = true;
-
-    // Check if we need identity selection
-    const savedId = loadL('al6_identity', null);
-    const validId = savedId && S.residents.find(r => r.id === savedId);
-    if (!validId) {
-      S.view = 'identity';
-    } else {
-      S.activeResidentId = savedId;
-      S.view = 'dashboard';
-      // Load notes in background for returning resident
-      loadAllNotes(savedId);
-    }
-
+    S.view = 'dashboard';
+    loadAllNotes(resId);
   } catch(e) {
     console.error('Bootstrap failed:', e);
-    // Fall back to static data
     S.dbReady = false;
-    S.view = 'identity';
+    S.signedIn = false;
+    S.loginMsg = 'Could not load the site. Check your connection and sign in again.';
+    S.view = 'login';
   }
 
   draw();
 
-  // Auto-fetch ICS if configured
-  if (S.icsUrl) {
-    try { fetchICS(); } catch(e) {}
-  }
-
-  // Check push status and register if first time
-  await checkPushStatus();
-  if (!S.pushRegistered && Notification.permission === 'default') {
-    // Prompt after a short delay so it doesn't feel abrupt
-    setTimeout(registerPush, 3000);
+  if (S.signedIn && S.icsUrl) { try { fetchICS(); } catch(e) {} }
+  if (S.signedIn) {
+    await checkPushStatus();
+    if (!S.pushRegistered && 'Notification' in window && Notification.permission === 'default') {
+      setTimeout(registerPush, 3000);   // prompt after a short delay so it doesn't feel abrupt
+    }
   }
 }
+
+async function bootstrap() {
+  draw();   // loading screen
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { S.view = 'login'; draw(); return; }
+  await loadApp();
+}
+// If the session ends elsewhere (sign-out in another tab, expired refresh token), return to the sign-in screen.
+sb.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT' && S.signedIn) location.reload(); });
 
 bootstrap();
 
